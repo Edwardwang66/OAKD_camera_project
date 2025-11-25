@@ -2,6 +2,25 @@
 
 This repository contains multiple OpenCV-based projects using the OAKD Lite camera for the Raspberry Pi 5 Donkey Car setup with a 7-inch screen.
 
+## 🎮 Main Menu System
+
+**Start here!** The main menu system provides user recognition, registration, and game selection.
+
+**Quick Start:**
+```bash
+python main_menu.py
+```
+
+**Features:**
+- **User Recognition**: Automatically recognizes registered users
+- **User Registration**: Register new users with face samples
+- **Personalized Greetings**: 
+  - Registered users: "Hello, [Name]!"
+  - Strangers: "Hello, Stranger! What game do you want to play?"
+- **Game Selection**: Choose from 3 games (1, 2, or 3)
+
+See [README_MAIN_MENU.md](README_MAIN_MENU.md) for detailed documentation.
+
 ## Projects
 
 ### Project 1: Rock-Paper-Scissors Game
@@ -91,6 +110,11 @@ See individual project READMEs for detailed instructions.
 
 ```
 OAKD_camera_project/
+├── main_menu.py        # Main menu system (START HERE)
+├── user_registration.py  # User registration & recognition
+├── game_menu.py        # Game selection menu
+├── registration_ui.py  # Registration UI
+├── camera.py           # Shared camera interface
 ├── project-1/          # Rock-Paper-Scissors Game
 │   ├── main.py
 │   ├── hand_gesture_detector.py
@@ -112,7 +136,10 @@ OAKD_camera_project/
 │   ├── camera.py
 │   ├── ui_display.py
 │   └── ...
-└── README.md           # This file
+├── user_data/          # User registration data (created automatically)
+├── requirements.txt    # Root dependencies
+├── README.md           # This file
+└── README_MAIN_MENU.md # Main menu documentation
 ```
 
 ## License
