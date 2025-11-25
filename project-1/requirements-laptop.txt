@@ -1,0 +1,9 @@
+# Requirements for laptop testing (without OAKD camera)
+# Use this if you don't have DepthAI installed
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+numpy>=1.24.0
+
+# Note: depthai is optional for laptop testing
+# pygame is also optional (not used in current implementation)
+
