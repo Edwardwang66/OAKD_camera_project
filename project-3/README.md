@@ -26,8 +26,10 @@ A gesture-based shooting game where two players face off using "pistol gestures"
 
 - Raspberry Pi 5
 - OAKD Lite camera (or webcam for testing)
-- 7-inch touchscreen display (800x480 recommended)
+- 7-inch touchscreen display (800x480 recommended, optional)
 - Donkey Car setup
+
+**Note**: The project can run headless via SSH with X11 forwarding. See main README for SSH setup instructions.
 
 ## Software Requirements
 
@@ -118,6 +120,23 @@ project-3/
 - First player to lose all health loses
 - The car announces: "Player X wins!!!"
 
+## Running on Raspberry Pi via SSH
+
+### Setup X11 Forwarding
+
+1. **On Mac**: Install and configure XQuartz (see main README)
+2. **Connect**: `ssh -Y pi@raspberrypi.local`
+3. **Run**: `python main.py`
+
+The OpenCV windows will display on your Mac via X11 forwarding.
+
+### Headless Mode
+
+The application automatically detects if GUI is available:
+- **GUI Available**: Windows display normally
+- **GUI Not Available**: Application continues running, skips window display
+- **No Crashes**: Gracefully handles missing GUI
+
 ## Troubleshooting
 
 ### Pistol gesture not detected
@@ -137,6 +156,11 @@ project-3/
 - Player A must point right
 - Player B must point left
 - Wait for cooldown between shots
+
+### GUI not available warning
+- This is normal if X11 forwarding is not set up
+- The game will still work, just without visual display
+- To enable GUI, follow SSH + X11 setup in main README
 
 ## Future Enhancements
 

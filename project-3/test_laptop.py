@@ -3,6 +3,10 @@ Simple test script for laptop testing - Pistol Detection
 Tests pistol gesture detection without full game
 """
 import cv2
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import is_gui_available, safe_imshow, safe_waitkey, print_gui_warning
 from camera import Camera
 from pistol_detector import PistolDetector
 
@@ -24,6 +28,11 @@ def test_pistol_detection():
         # Initialize camera (will fallback to webcam)
         camera = Camera(use_oakd=True)
         detector = PistolDetector()
+        
+        # Check GUI availability
+        gui_available = is_gui_available()
+        if not gui_available:
+            print_gui_warning()
         
         print("Camera initialized. Make a pistol gesture to test...\n")
         
@@ -72,15 +81,20 @@ def test_pistol_detection():
                        (10, annotated_frame.shape[0] - 10), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
-            cv2.imshow("Pistol Detection Test", annotated_frame)
+            if gui_available:
+                safe_imshow("Pistol Detection Test", annotated_frame)
             
-            key = cv2.waitKey(1) & 0xFF
+            key = safe_waitkey(1)
             if key == ord('q'):
                 break
         
         camera.release()
         detector.release()
-        cv2.destroyAllWindows()
+        if gui_available:
+            try:
+                cv2.destroyAllWindows()
+            except:
+                pass
         print("\nTest complete!")
         
     except Exception as e:
