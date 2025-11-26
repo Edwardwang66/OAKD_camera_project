@@ -4,6 +4,10 @@ This script doesn't require OAKD camera or DepthAI
 Perfect for testing on your laptop before deploying to Raspberry Pi
 """
 import cv2
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import is_gui_available, safe_imshow, safe_waitkey, print_gui_warning
 from hand_gesture_detector import HandGestureDetector, Gesture
 
 
@@ -35,6 +39,11 @@ def test_webcam_gesture():
     
     # Initialize gesture detector
     detector = HandGestureDetector()
+    
+    # Check GUI availability
+    gui_available = is_gui_available()
+    if not gui_available:
+        print_gui_warning()
     
     print("Camera initialized. Show your hand to test gesture detection...\n")
     
@@ -68,7 +77,8 @@ def test_webcam_gesture():
                        (10, annotated_frame.shape[0] - 5), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             
-            cv2.imshow("Laptop Test - Gesture Detection", annotated_frame)
+            if gui_available:
+                safe_imshow("Laptop Test - Gesture Detection", annotated_frame)
             
             # Print gesture every 30 frames to avoid spam
             if frame_count % 30 == 0 and gesture != Gesture.NONE:
@@ -76,7 +86,7 @@ def test_webcam_gesture():
             
             frame_count += 1
             
-            key = cv2.waitKey(1) & 0xFF
+            key = safe_waitkey(1)
             if key == ord('q'):
                 break
     
@@ -89,7 +99,11 @@ def test_webcam_gesture():
     finally:
         cap.release()
         detector.release()
-        cv2.destroyAllWindows()
+        if gui_available:
+            try:
+                cv2.destroyAllWindows()
+            except:
+                pass
         print("\nTest complete!")
 
 

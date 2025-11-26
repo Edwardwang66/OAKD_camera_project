@@ -1,0 +1,21 @@
+# Requirements for Raspberry Pi 5 with OAKD Lite Camera
+# Install with: pip install -r requirements-pi.txt
+
+# Core dependencies
+opencv-python>=4.8.0
+numpy>=1.24.0
+mediapipe>=0.10.0
+
+# DepthAI for OAKD Lite camera
+depthai>=2.23.0
+
+# PyTorch for model-based gesture detection (CPU version for Pi)
+# Note: Install PyTorch separately for ARM architecture
+# See: https://pytorch.org/get-started/locally/
+# For Raspberry Pi, you may need to build from source or use pre-built wheels
+torch>=1.13.0
+torchvision>=0.14.0
+
+# Optional: For better performance
+# pillow>=9.0.0
+

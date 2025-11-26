@@ -27,16 +27,16 @@ class DrawingCanvas:
         self.is_drawing = False
         self.last_point = None
     
-    def add_point(self, x, y, is_detected):
+    def add_point(self, x, y, can_draw):
         """
         Add a point to the drawing
         
         Args:
             x: X coordinate
             y: Y coordinate
-            is_detected: Whether finger is detected
+            can_draw: True if should draw (index finger), False if fist (stop)
         """
-        if is_detected and x is not None and y is not None:
+        if can_draw and x is not None and y is not None:
             # Map camera coordinates to canvas coordinates
             # Assuming camera is 640x480, map to canvas
             canvas_x = int((x / 640) * self.width)
@@ -50,11 +50,15 @@ class DrawingCanvas:
                 # Draw line from last point to current point
                 cv2.line(self.canvas, self.last_point, (canvas_x, canvas_y), 
                         self.current_color, self.brush_size)
+            else:
+                # Start new stroke - draw a small circle at start
+                cv2.circle(self.canvas, (canvas_x, canvas_y), 
+                          self.brush_size // 2, self.current_color, -1)
             
             self.last_point = (canvas_x, canvas_y)
             self.is_drawing = True
         else:
-            # Finger not detected, stop drawing
+            # Fist detected or no hand - stop drawing (lift pen)
             self.last_point = None
             self.is_drawing = False
     

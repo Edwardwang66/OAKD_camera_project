@@ -17,6 +17,7 @@ from camera import Camera
 from user_registration import UserRegistration
 from game_menu import GameMenu, GameChoice
 from registration_ui import RegistrationUI
+from utils import is_gui_available, safe_imshow, safe_waitkey, print_gui_warning
 
 
 class MainMenuSystem:
@@ -36,6 +37,11 @@ class MainMenuSystem:
         self.running = True
         self.current_user = None
         self.is_stranger = True
+        
+        # Check GUI availability
+        self.gui_available = is_gui_available()
+        if not self.gui_available:
+            print_gui_warning()
         
         print("Initialization complete!")
         print("\nSystem ready. Looking for users...")
@@ -99,9 +105,10 @@ class MainMenuSystem:
                 status_message=status_message
             )
             
-            cv2.imshow("User Registration", display)
+            if self.gui_available:
+                safe_imshow("User Registration", display)
             
-            key = cv2.waitKey(1) & 0xFF
+            key = safe_waitkey(1)
             
             if key == ord(' '):  # Space to capture
                 if len(faces) > 0:
@@ -167,10 +174,11 @@ class MainMenuSystem:
                 is_stranger=self.is_stranger
             )
             
-            cv2.imshow("Main Menu - Game Selection", display)
+            if self.gui_available:
+                safe_imshow("Main Menu - Game Selection", display)
             
             # Handle keyboard input
-            key = cv2.waitKey(1) & 0xFF
+            key = safe_waitkey(1)
             choice = self.menu.handle_key(key)
             
             if choice == GameChoice.REGISTER:
@@ -233,7 +241,11 @@ class MainMenuSystem:
         """Clean up resources"""
         print("\nCleaning up...")
         self.camera.release()
-        cv2.destroyAllWindows()
+        if self.gui_available:
+            try:
+                cv2.destroyAllWindows()
+            except:
+                pass
         print("Cleanup complete!")
 
 

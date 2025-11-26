@@ -4,9 +4,19 @@ A real-time air drawing application that tracks your index finger and visualizes
 
 ## Features
 
+- **Gesture-Based Drawing Control**: 
+  - **Index Finger Extended** = Draw (green indicator)
+  - **Fist** = Stop drawing / Lift pen (red indicator)
 - **Index Finger Tracking**: Uses MediaPipe to track index finger position in real-time
 - **Air Drawing**: Draw in the air by moving your index finger
 - **Real-time Visualization**: See your drawing appear on the 7-inch screen
+- **Drawing Classification**: Automatically detects what you're drawing:
+  - **Circle** - Round shapes and ovals
+  - **Square** - Four-sided shapes (squares, rectangles)
+  - **Triangle** - Three-sided shapes
+  - **Line** - Long, thin lines
+  - **Heart** - Heart-shaped drawings
+  - **Unknown** - Other shapes
 - **Multiple Colors**: Switch between 5 different colors
 - **Adjustable Brush Size**: Increase/decrease brush size
 - **Clear Canvas**: Clear the drawing with a single keypress
@@ -65,8 +75,10 @@ python main.py
 
 ### Controls
 
-- **Index Finger**: Point and move your index finger to draw
+- **Index Finger Extended**: Draw (green indicator shows)
+- **Fist**: Stop drawing / Lift pen (red indicator shows)
 - **'c'**: Clear the canvas
+- **'d'**: Force detection of current drawing
 - **'1'**: Black color
 - **'2'**: Red color
 - **'3'**: Green color
@@ -75,6 +87,39 @@ python main.py
 - **'+' or '='**: Increase brush size
 - **'-' or '_'**: Decrease brush size
 - **'q'**: Quit application
+
+### What Can Be Detected
+
+The drawing classifier can detect the following shapes:
+
+1. **Circle** (✓)
+   - Round shapes with high circularity
+   - Ovals and ellipses
+   - Detection: Based on contour circularity and vertex count
+
+2. **Square** (✓)
+   - Four-sided shapes
+   - Squares and rectangles
+   - Detection: 4 vertices with square-like aspect ratio
+
+3. **Triangle** (✓)
+   - Three-sided shapes
+   - Any triangular form
+   - Detection: 3 vertices with high solidity
+
+4. **Line** (✓)
+   - Long, thin lines
+   - Straight or slightly curved lines
+   - Detection: High aspect ratio (very long or very tall)
+
+5. **Heart** (✓)
+   - Heart-shaped drawings
+   - Wider at top, pointed at bottom
+   - Detection: Specific geometric properties (wider top, two lobes)
+
+6. **Unknown**
+   - Other shapes that don't match above categories
+   - Complex drawings or incomplete shapes
 
 ## How It Works
 
@@ -88,14 +133,26 @@ python main.py
 
 ```
 project-2/
-├── main.py              # Main application entry point
-├── camera.py            # Camera interface (OAKD or webcam)
-├── finger_tracker.py    # Index finger tracking using MediaPipe
-├── drawing_canvas.py    # Drawing canvas management
-├── ui_display.py        # UI rendering for 7-inch screen
-├── requirements.txt     # Python dependencies
-└── README.md            # This file
+├── main.py                  # Main application entry point
+├── camera.py                # Camera interface (OAKD or webcam)
+├── finger_tracker.py        # Gesture detection (fist vs index finger)
+├── drawing_canvas.py        # Drawing canvas management
+├── drawing_classifier.py    # Drawing classification model
+├── ui_display.py            # UI rendering for 7-inch screen
+├── test_classifier.py       # Test script for classifier
+├── requirements.txt         # Python dependencies
+└── README.md                # This file
 ```
+
+## Testing the Classifier
+
+You can test what shapes the classifier can detect:
+
+```bash
+python test_classifier.py
+```
+
+This will create test shapes and show what the classifier detects.
 
 ## Troubleshooting
 

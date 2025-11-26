@@ -19,7 +19,8 @@ class DrawingUI:
         self.screen_height = screen_height
     
     def create_display(self, camera_frame, drawing_canvas, is_drawing, 
-                      current_color=(0, 0, 0), brush_size=5):
+                      current_color=(0, 0, 0), brush_size=5,
+                      detected_drawing=None, detection_confidence=0.0):
         """
         Create the combined display showing camera feed and drawing canvas
         
@@ -29,6 +30,8 @@ class DrawingUI:
             is_drawing: Whether currently drawing
             current_color: Current drawing color
             brush_size: Current brush size
+            detected_drawing: Detected drawing type (DrawingType enum)
+            detection_confidence: Confidence of detection (0-1)
             
         Returns:
             numpy.ndarray: Combined display frame
@@ -79,15 +82,25 @@ class DrawingUI:
         cv2.putText(display, f"Brush: {brush_size}px", (camera_width + 10, brush_y), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
         
+        # Drawing detection result
+        detection_y = brush_y + 30
+        if detected_drawing is not None and detection_confidence > 0.5:
+            detection_text = f"Detected: {detected_drawing.value.upper()}"
+            confidence_text = f"({detection_confidence:.0%})"
+            cv2.putText(display, detection_text, (camera_width + 10, detection_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            cv2.putText(display, confidence_text, (camera_width + 10, detection_y + 20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        
         # Instructions at bottom
-        instructions_y = self.screen_height - 60
-        cv2.putText(display, "Point your index finger to draw", 
+        instructions_y = self.screen_height - 80
+        cv2.putText(display, "Index finger = Draw | Fist = Stop", 
                    (camera_width + 10, instructions_y), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
-        cv2.putText(display, "Press 'c' to clear | 'q' to quit", 
+        cv2.putText(display, "Press 'c' to clear | 'd' to detect", 
                    (camera_width + 10, instructions_y + 20), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
-        cv2.putText(display, "Press '1'-'5' to change color", 
+        cv2.putText(display, "Press '1'-'5' to change color | 'q' to quit", 
                    (camera_width + 10, instructions_y + 40), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
         
