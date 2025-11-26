@@ -4,6 +4,10 @@ Car acts as referee, detects pistol gestures and determines hits
 """
 import cv2
 import time
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import is_gui_available, safe_imshow, safe_waitkey, print_gui_warning
 from camera import Camera
 from pistol_detector import PistolDetector
 from game_logic import ShootingGame, GameState
@@ -27,6 +31,11 @@ class ShootingGameApp:
         self.running = True
         self.hit_display_time = 0
         self.hit_display_duration = 30  # Frames to show hit message
+        
+        # Check GUI availability
+        self.gui_available = is_gui_available()
+        if not self.gui_available:
+            print_gui_warning()
         
         print("Initialization complete!")
         print("\nGame Rules:")
@@ -101,10 +110,11 @@ class ShootingGameApp:
             )
             
             # Show display
-            cv2.imshow("1v1 Shooting Game - Referee", display)
+            if self.gui_available:
+                safe_imshow("1v1 Shooting Game - Referee", display)
             
             # Handle keyboard input
-            key = cv2.waitKey(1) & 0xFF
+            key = safe_waitkey(1)
             if key == ord('q'):
                 self.running = False
             elif key == ord('s') and self.game.state == GameState.WAITING:
@@ -148,7 +158,11 @@ class ShootingGameApp:
         print("\nCleaning up...")
         self.camera.release()
         self.detector.release()
-        cv2.destroyAllWindows()
+        if self.gui_available:
+            try:
+                cv2.destroyAllWindows()
+            except:
+                pass
         print("Cleanup complete!")
 
 
