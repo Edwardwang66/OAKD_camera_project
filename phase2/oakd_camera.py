@@ -33,10 +33,12 @@ class OAKDCamera:
         self.device = None
         self.rgb_queue = None
         self.nn_queue = None
+        self.depth_queue = None
         self.detection_nn = None
         self.available = False
         self.use_mediapipe_fallback = False
         self.mediapipe_pose = None
+        self.has_depth = False
         
         if not DEPTHAI_AVAILABLE:
             print("Error: DepthAI not available. Camera will not work.")
@@ -69,6 +71,10 @@ class OAKDCamera:
             cam_rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
             
             # Create detection network for person detection
+            # NOTE: This runs on OAKD camera's Myriad X VPU (Edge AI)
+            # - Model runs directly on camera hardware, not Raspberry Pi CPU
+            # - Reduces CPU load and improves performance
+            # - Only detection results are sent to Raspberry Pi, not raw frames
             # Try MobileNetDetectionNetwork first (older DepthAI versions)
             # Fall back to NeuralNetwork (newer versions)
             try:
@@ -80,6 +86,7 @@ class OAKDCamera:
                 use_mobilenet_node = False
             
             # Try to get MobileNet-SSD model
+            # Model is converted to .blob format and runs on OAKD VPU
             try:
                 import blobconverter
                 blob_path = blobconverter.from_zoo(
@@ -122,6 +129,49 @@ class OAKDCamera:
             manip.initialConfig.setFrameType(dai.ImgFrame.Type.BGR888p)
             manip.setMaxOutputFrameSize(300 * 300 * 3)
             
+            # Create mono cameras for depth (if available on OAKD Lite)
+            # Try to add stereo depth support
+            try:
+                mono_left = self.pipeline.create(dai.node.MonoCamera)
+                mono_right = self.pipeline.create(dai.node.MonoCamera)
+                
+                mono_left.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+                mono_left.setBoardSocket(dai.CameraBoardSocket.LEFT)
+                mono_right.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+                mono_right.setBoardSocket(dai.CameraBoardSocket.RIGHT)
+                
+                # Create stereo depth node
+                stereo = self.pipeline.create(dai.node.StereoDepth)
+                try:
+                    stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+                except AttributeError:
+                    try:
+                        stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_ACCURACY)
+                    except AttributeError:
+                        print("Warning: Could not set stereo preset mode, using default settings")
+                
+                stereo.setLeftRightCheck(True)
+                stereo.setSubpixel(False)
+                stereo.setExtendedDisparity(False)
+                
+                # Create depth output
+                try:
+                    xout_depth = self.pipeline.create(dai.node.XLinkOut)
+                except AttributeError:
+                    xout_depth = self.pipeline.create(dai.XLinkOut)
+                xout_depth.setStreamName("depth")
+                
+                # Link stereo depth
+                mono_left.out.link(stereo.left)
+                mono_right.out.link(stereo.right)
+                stereo.depth.link(xout_depth.input)
+                
+                self.has_depth = True
+            except Exception as e:
+                print(f"[OAKDCamera] Warning: Could not initialize depth cameras: {e}")
+                print("[OAKDCamera] Depth support disabled (camera may not have stereo)")
+                self.has_depth = False
+            
             # Linking
             # Camera preview -> ImageManip -> Detection Network
             cam_rgb.preview.link(manip.inputImage)
@@ -136,8 +186,14 @@ class OAKDCamera:
             self.rgb_queue = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
             self.nn_queue = self.device.getOutputQueue(name="nn", maxSize=4, blocking=False)
             
+            if self.has_depth:
+                self.depth_queue = self.device.getOutputQueue(name="depth", maxSize=4, blocking=False)
+                print("[OAKDCamera] Camera initialized successfully with DepthAI person detection and depth support")
+            else:
+                self.depth_queue = None
+                print("[OAKDCamera] Camera initialized successfully with DepthAI person detection (no depth)")
+            
             self.available = True
-            print("[OAKDCamera] Camera initialized successfully with DepthAI person detection")
             
         except Exception as e:
             print(f"[OAKDCamera] Error setting up DepthAI detection: {e}")
@@ -151,7 +207,11 @@ class OAKDCamera:
                 raise
     
     def setup_mediapipe_fallback(self):
-        """Set up OAKD camera with MediaPipe person detection fallback"""
+        """
+        Set up OAKD camera with MediaPipe person detection fallback
+        NOTE: MediaPipe runs on Raspberry Pi CPU (not on OAKD VPU)
+        This is a fallback when DepthAI detection is not available
+        """
         try:
             # Create simple RGB pipeline
             self.pipeline = dai.Pipeline()
@@ -184,8 +244,10 @@ class OAKDCamera:
             )
             
             self.use_mediapipe_fallback = True
+            self.has_depth = False
+            self.depth_queue = None
             self.available = True
-            print("[OAKDCamera] Camera initialized with MediaPipe person detection fallback")
+            print("[OAKDCamera] Camera initialized with MediaPipe person detection fallback (no depth)")
             
         except Exception as e:
             print(f"[OAKDCamera] Error setting up MediaPipe fallback: {e}")
@@ -374,6 +436,22 @@ class OAKDCamera:
         
         return detections
     
+    def get_depth_frame(self):
+        """
+        Get a depth frame from the camera
+        
+        Returns:
+            numpy.ndarray: Depth frame (16-bit, in millimeters), or None if no depth available
+        """
+        if not self.has_depth or self.depth_queue is None:
+            return None
+        
+        in_depth = self.depth_queue.tryGet()
+        if in_depth is not None:
+            depth_frame = in_depth.getFrame()
+            return depth_frame
+        return None
+    
     def release(self):
         """Release camera resources"""
         if self.mediapipe_pose:
@@ -383,4 +461,5 @@ class OAKDCamera:
         self.pipeline = None
         self.rgb_queue = None
         self.nn_queue = None
+        self.depth_queue = None
         print("[OAKDCamera] Released")
