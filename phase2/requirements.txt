@@ -1,22 +1,18 @@
-# Phase 2 Requirements
-# Car Following and Approaching with DonkeyCar and VESC
+# Phase 2 Requirements for Raspberry Pi 5
+# Person Following and Approaching with OAKD Lite Camera
 
-# Core dependencies (from phase1)
+# Core dependencies
 opencv-python>=4.8.0
 numpy>=1.24.0
-mediapipe>=0.10.0
-six>=1.16.0
 depthai>=2.23.0
+blobconverter>=1.0.0
+mediapipe>=0.10.0  # Fallback for person detection
 
-# DonkeyCar (optional, for VESC control)
-# Install with: pip install donkeycar
-# Or follow: https://docs.donkeycar.com/
-
-# PySerial (for direct VESC communication, if not using DonkeyCar)
-pyserial>=3.5
+# For VESC control (optional, install separately)
+# pyserial>=3.5
+# donkeycar (install separately: https://docs.donkeycar.com/)
 
 # Note: For actual car control, you need:
-# 1. DonkeyCar installed and configured
+# 1. DonkeyCar installed and configured on Raspberry Pi
 # 2. VESC firmware updated and calibrated
-# 3. Proper serial port permissions
-
+# 3. Proper serial port permissions: sudo usermod -a -G dialout $USER

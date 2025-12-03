@@ -23,10 +23,10 @@ def test_imports():
         return False
     
     try:
-        from phase2_demo import Phase2Demo
-        print("✓ phase2_demo imported")
+        from oakd_camera import OAKDCamera
+        print("✓ oakd_camera imported")
     except Exception as e:
-        print(f"✗ phase2_demo import failed: {e}")
+        print(f"✗ oakd_camera import failed: {e}")
         return False
     
     return True
@@ -37,25 +37,27 @@ def test_car_controller():
     print("\nTesting car controller...")
     try:
         from car_controller import CarController
-        car = CarController(use_donkeycar=False)  # Use simulation mode
+        car = CarController(simulation_mode=True)  # Use simulation mode
         print("✓ Car controller initialized (simulation mode)")
         
         # Test velocity control
         car.set_velocity(0.5, 0.3)
         print("✓ Velocity control test passed")
         
-        # Test motor control
-        car.set_motor(0.3, 0.3)
-        print("✓ Motor control test passed")
-        
         # Test stop
         car.stop()
         print("✓ Stop test passed")
+        
+        # Test get_state
+        state = car.get_state()
+        print(f"✓ Get state test passed: {state}")
         
         car.release()
         return True
     except Exception as e:
         print(f"✗ Car controller test failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -74,7 +76,7 @@ def test_person_follower():
         distance = 2.0
         
         control = follower.compute_control(person_bbox, image_width, distance)
-        print(f"✓ Control computed: linear={control['linear']:.2f}, angular={control['angular']:.2f}")
+        print(f"✓ Control computed: {control['direction']}, linear={control['linear']:.2f}, angular={control['angular']:.2f}")
         
         # Test search controller
         searcher = SearchController()

@@ -1,83 +1,118 @@
-# Phase 2: Car Following and Approaching
+# Phase 2: Person Following and Approaching
 
 Phase 2 implements autonomous car control to search for a person, approach them, and stop at a target distance.
 
-## Features
+**Designed for Raspberry Pi 5 with OAKD Lite camera and DonkeyCar/VESC**
 
-### 1. Minimal Car Control Interface
-- **Velocity Control**: `set_velocity(linear, angular)` - Control car with linear and angular speeds
-- **Motor Control**: `set_motor(left_speed, right_speed)` - Direct motor control
-- **VESC Support**: Integration with DonkeyCar VESC controller
-- **Simulation Mode**: Test without actual car hardware
+## Overview
 
-### 2. Person Following Control
-- **Angular Control**: Turns towards person based on bounding box center
-- **Distance Control**: Approaches person to target distance
-- **Alignment Check**: Verifies person is centered before moving forward
-- **Proximity Check**: Stops when close enough and aligned
+The car operates autonomously with three main states:
+- **SEARCH**: Rotates slowly to find a person
+- **APPROACH**: Moves towards person (LEFT/RIGHT/STRAIGHT based on person position)
+- **INTERACT**: Stops in front of person at target distance
 
-### 3. Search Behavior
-- **SEARCH State**: Rotates slowly in place when no person detected
-- **APPROACH State**: Moves towards person when detected
-- **INTERACT State**: Stops at target distance and waits
-- **STOP State**: Emergency stop
+## Hardware Requirements
 
-## File Structure
+- **Raspberry Pi 5** (or Raspberry Pi 4)
+- **OAKD Lite Camera** (connected via USB)
+- **DonkeyCar** with VESC motor controller
+- **Mac** (for X11 forwarding display via XQuartz)
 
-```
-car_controller.py      # Minimal car control interface (VESC/DonkeyCar)
-person_follower.py     # Following and approaching control logic
-phase2_demo.py         # Main demo program with state machine
-```
+## Setup
 
-## Installation
+### 1. Raspberry Pi Setup
 
-### 1. Install Dependencies
+#### Install Dependencies
 
 ```bash
 cd phase2
 pip install -r requirements.txt
 ```
 
-### 2. DonkeyCar Setup (for actual car control)
+#### OAKD Camera Setup
 
-If you want to control a real car, you need DonkeyCar installed:
+1. **Connect OAKD Lite Camera**: Plug in via USB
+2. **Set Permissions**:
+   ```bash
+   sudo usermod -a -G dialout $USER
+   # Log out and log back in for changes to take effect
+   ```
+3. **Verify Connection**:
+   ```bash
+   python test_oakd_simple.py
+   ```
+
+#### VESC Setup (for actual car control)
+
+1. **Install DonkeyCar** (follow official guide):
+   ```bash
+   # Follow: https://docs.donkeycar.com/
+   ```
+
+2. **Find VESC Port**:
+   ```bash
+   ls -l /dev/ttyACM* /dev/ttyUSB*
+   ```
+
+3. **Set Permissions**:
+   ```bash
+   sudo chmod 666 /dev/ttyACM0  # Replace with your port
+   # Or add user to dialout group (already done above)
+   ```
+
+### 2. Mac Setup (for X11 Display)
+
+#### Install XQuartz
 
 ```bash
-# Follow DonkeyCar installation guide
-# https://docs.donkeycar.com/
-
-# Or install with pip (if available)
-pip install donkeycar
+brew install --cask xquartz
 ```
 
-### 3. VESC Configuration
+#### Configure XQuartz
 
-1. **Update VESC Firmware**: Follow VESC setup guide
-2. **Calibrate VESC**: Use VESC Tool to calibrate
-3. **Find Serial Port**: Usually `/dev/ttyACM0` or `/dev/ttyUSB0`
-4. **Set Permissions**: 
-   ```bash
-   sudo chmod 666 /dev/ttyACM0
-   # Or add user to dialout group
-   sudo usermod -a -G dialout $USER
-   ```
+1. Open XQuartz (Applications > Utilities > XQuartz)
+2. Go to **XQuartz > Preferences > Security**
+3. Check **"Allow connections from network clients"**
+4. **Restart XQuartz** (important!)
+
+### 3. Connect via SSH with X11 Forwarding
+
+```bash
+# From Mac, connect to Raspberry Pi
+ssh -Y pi@raspberrypi.local
+
+# Or with IP address
+ssh -Y pi@192.168.1.XXX
+
+# Verify X11 forwarding
+echo $DISPLAY
+# Should show: localhost:10.0 or similar
+```
 
 ## Usage
 
 ### Basic Run (Simulation Mode)
 
+Test without actual car control:
+
 ```bash
 cd phase2
-python phase2_demo.py
+python phase2_demo.py --simulation
 ```
 
-This will run in simulation mode (no actual car control).
+This will:
+- Initialize OAKD camera with person detection
+- Run in simulation mode (prints car commands)
+- Display video via X11 forwarding on your Mac
+- Show LEFT/RIGHT/STRAIGHT/STOP commands based on person position
 
-### With Real Car
+### With Real Car Control
 
 ```bash
-# Specify VESC port if needed
+# Auto-detect VESC port
+python phase2_demo.py
+
+# Specify VESC port
 python phase2_demo.py --vesc-port /dev/ttyACM0
 
 # Adjust target distance
@@ -87,7 +122,8 @@ python phase2_demo.py --target-distance 1.5
 ### Command Line Arguments
 
 - `--target-distance`: Target distance to person in meters (default: 1.0)
-- `--vesc-port`: VESC serial port (e.g., /dev/ttyACM0)
+- `--vesc-port`: VESC serial port (e.g., /dev/ttyACM0), None for auto-detect
+- `--simulation`: Run in simulation mode (no actual car control)
 
 ## State Machine
 
@@ -98,8 +134,9 @@ The car operates in a state machine with 4 states:
    - Switches to APPROACH when person detected
 
 2. **APPROACH**:
-   - Turns towards person (angular control)
+   - Turns towards person (angular control based on person position)
    - Moves forward when aligned (linear control)
+   - Outputs: LEFT TURN, RIGHT TURN, or STRAIGHT
    - Switches to INTERACT when close enough and aligned
    - Switches to SEARCH if person lost
 
@@ -119,10 +156,17 @@ The car operates in a state machine with 4 states:
 ```
 error_x = person_center_x - image_center_x
 normalized_error = error_x / (image_width / 2)
-angular = k_angle * normalized_error
+angular = k_angle * normalized_error * max_angular_speed
 ```
 
+- If `normalized_error > threshold` → RIGHT TURN
+- If `normalized_error < -threshold` → LEFT TURN
+- If `abs(normalized_error) < threshold` → STRAIGHT
+
 ### Distance Control
+
+Currently uses bounding box size as heuristic (larger box = closer person).
+For Part 2 with depth, will use:
 
 ```
 distance_error = distance_to_person - TARGET_DISTANCE
@@ -132,19 +176,27 @@ linear = k_linear * distance_error  (only if aligned)
 ### Ready for Interaction
 
 Car is ready when:
-- `abs(distance_error) < 0.2m`
-- `abs(angle_error) < threshold`
+- Person bounding box is large enough (close enough)
+- `abs(error_x) < threshold` (aligned)
 
 ## Controls
 
-### Keyboard (OpenCV Window)
-- `'q'` - Quit
+- `'q'` - Quit and stop car
 - `'s'` - Emergency stop
+- `'r'` - Reset to SEARCH state
 
-### Terminal Commands
-- `'q'` or `'quit'` - Quit
-- `'s'` or `'stop'` - Emergency stop
-- `'r'` or `'reset'` - Reset to SEARCH state
+## File Structure
+
+```
+phase2/
+├── car_controller.py      # Car control interface (VESC/DonkeyCar)
+├── oakd_camera.py         # OAKD camera with person detection
+├── person_follower.py     # Following and approaching control logic
+├── phase2_demo.py         # Main demo program with state machine
+├── test_oakd_simple.py    # Simple OAKD camera test
+├── requirements.txt       # Python dependencies
+└── README.md             # This file
+```
 
 ## Configuration
 
@@ -157,54 +209,98 @@ follower = PersonFollower(
     max_angular_speed=1.0,    # Max rotation speed (rad/s)
     k_angle=1.0,              # Angular control gain
     k_linear=0.5,             # Linear control gain
-    angle_threshold=0.1,       # Alignment threshold (rad)
+    angle_threshold=0.1,       # Alignment threshold (normalized)
     distance_threshold=0.2    # Distance threshold (m)
 )
 ```
 
 ## Troubleshooting
 
-### Car Not Moving
+### OAKD Camera Not Detected
 
-1. **Check VESC Connection**:
+1. **Check USB Connection**: Ensure OAKD Lite is connected via USB
+2. **Check Permissions**: 
    ```bash
    ls -l /dev/ttyACM*
+   sudo usermod -a -G dialout $USER
+   # Log out and log back in
+   ```
+3. **Test Camera**:
+   ```bash
+   python test_oakd_simple.py
+   ```
+
+### X11 Display Not Working
+
+1. **Check XQuartz is Running**: On Mac, make sure XQuartz is open
+2. **Check DISPLAY Variable**:
+   ```bash
+   echo $DISPLAY
+   # Should show: localhost:10.0 or similar
+   ```
+3. **Reconnect with X11 Forwarding**:
+   ```bash
+   ssh -Y pi@raspberrypi.local
+   ```
+
+### VESC Not Connecting
+
+1. **Check VESC Port**:
+   ```bash
+   ls -l /dev/ttyACM* /dev/ttyUSB*
    ```
 
 2. **Check Permissions**:
    ```bash
-   sudo chmod 666 /dev/ttyACM0
+   sudo chmod 666 /dev/ttyACM0  # Replace with your port
    ```
 
-3. **Test VESC**: Use VESC Tool to verify connection
+3. **Test DonkeyCar**:
+   ```bash
+   # Verify DonkeyCar is installed
+   python -c "import donkeycar; print('OK')"
+   ```
 
-4. **Check DonkeyCar**: Verify DonkeyCar is installed and configured
+4. **Run in Simulation Mode First**:
+   ```bash
+   python phase2_demo.py --simulation
+   ```
 
 ### Person Not Detected
 
 - Ensure good lighting
 - Check camera angle
-- Verify MediaPipe is working
-
-### Car Moves Erratically
-
-- Adjust control gains (`k_angle`, `k_linear`)
-- Reduce max speeds
-- Check camera frame rate
+- Verify blobconverter is installed: `pip install blobconverter`
+- Person detection uses MobileNet-SSD (class 15 in COCO dataset)
 
 ## Safety
 
 ⚠️ **IMPORTANT**: 
-- Always test in simulation mode first
-- Have emergency stop ready
+- Always test in simulation mode first: `--simulation`
+- Have emergency stop ready (press 's' key)
 - Test in safe, open area
 - Start with low speeds
 - Monitor car behavior closely
+- Make sure car can be stopped manually
 
-## Next Steps (Phase 3+)
+## Next Steps
 
-- Obstacle avoidance
-- Multiple person tracking
-- Path planning
-- Advanced control algorithms (PID, MPC)
+- [ ] Add depth-based distance control (OAKD depth support)
+- [ ] Obstacle avoidance
+- [ ] Multiple person tracking
+- [ ] Advanced control algorithms (PID, MPC)
+- [ ] Logging and data collection
 
+## X11 Forwarding Performance
+
+If X11 forwarding is slow:
+- Use wired network instead of WiFi
+- Reduce camera resolution in code
+- Consider using VNC instead for better performance
+
+## Notes
+
+- The demo is designed to work with or without X11 forwarding
+- If DISPLAY is not set, processing continues but no windows appear
+- All control logic works regardless of display availability
+- Terminal output shows status every 2 seconds

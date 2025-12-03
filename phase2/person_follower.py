@@ -1,6 +1,7 @@
 """
 Person Follower Controller
 Implements following and approaching logic based on person detection
+Based on person bounding box position to determine left/right/straight commands
 """
 import numpy as np
 
@@ -8,7 +9,7 @@ import numpy as np
 class PersonFollower:
     """
     Controller for following and approaching a person
-    Implements PID-like control based on person bounding box and distance
+    Computes left/right/straight commands based on person position
     """
     def __init__(self, 
                  target_distance=1.0,
@@ -27,7 +28,7 @@ class PersonFollower:
             max_angular_speed: Maximum angular speed in rad/s
             k_angle: Proportional gain for angular control
             k_linear: Proportional gain for linear control
-            angle_threshold: Angle error threshold for "aligned" (rad)
+            angle_threshold: Angle error threshold for "aligned" (normalized, 0-1)
             distance_threshold: Distance error threshold for "close enough" (m)
         """
         self.target_distance = target_distance
@@ -38,26 +39,28 @@ class PersonFollower:
         self.angle_threshold = angle_threshold
         self.distance_threshold = distance_threshold
     
-    def compute_control(self, person_bbox, image_width, distance_to_person):
+    def compute_control(self, person_bbox, image_width, distance_to_person=None):
         """
         Compute control commands based on person detection
         
         Args:
             person_bbox: Person bounding box (x_min, y_min, x_max, y_max) or None
             image_width: Width of the image in pixels
-            distance_to_person: Distance to person in meters, or None if not detected
+            distance_to_person: Distance to person in meters, or None if not available
             
         Returns:
             dict: Control commands with keys:
                 - 'linear': Linear velocity (m/s)
                 - 'angular': Angular velocity (rad/s)
+                - 'direction': 'LEFT', 'RIGHT', 'STRAIGHT', or 'STOP'
                 - 'aligned': bool, whether person is centered
                 - 'close_enough': bool, whether close enough to target distance
         """
-        if person_bbox is None or distance_to_person is None:
+        if person_bbox is None:
             return {
                 'linear': 0.0,
                 'angular': 0.0,
+                'direction': 'STOP',
                 'aligned': False,
                 'close_enough': False
             }
@@ -73,41 +76,67 @@ class PersonFollower:
         normalized_error = error_x / (image_width / 2.0)  # Normalize to [-1, 1]
         
         # Angular control: turn towards person
-        angular = self.k_angle * normalized_error
+        angular = self.k_angle * normalized_error * self.max_angular_speed
         angular = np.clip(angular, -self.max_angular_speed, self.max_angular_speed)
         
-        # Check if aligned (person is roughly centered)
-        abs_normalized_error = abs(normalized_error)
-        aligned = abs_normalized_error < (self.angle_threshold / self.max_angular_speed * 2.0)
+        # Determine direction
+        if abs(normalized_error) < self.angle_threshold:
+            direction = 'STRAIGHT'
+            aligned = True
+        elif normalized_error > 0:
+            direction = 'RIGHT TURN'
+            aligned = False
+        else:
+            direction = 'LEFT TURN'
+            aligned = False
         
         # Distance control: move towards/away from person
-        distance_error = distance_to_person - self.target_distance
-        
-        # Only move forward if roughly aligned
-        if aligned:
-            linear = self.k_linear * distance_error
-            linear = np.clip(linear, -self.max_linear_speed, self.max_linear_speed)
+        # For Part 1, we don't have depth, so we'll use a simple heuristic
+        # based on bounding box size (larger box = closer person)
+        if distance_to_person is not None:
+            distance_error = distance_to_person - self.target_distance
+            close_enough = abs(distance_error) < self.distance_threshold
             
-            # Don't move backwards (only approach, don't retreat)
-            if linear < 0:
+            # Only move forward if roughly aligned
+            if aligned and not close_enough:
+                linear = self.k_linear * distance_error
+                linear = np.clip(linear, 0, self.max_linear_speed)  # Don't move backwards
+            else:
                 linear = 0.0
         else:
-            # Not aligned - only rotate, don't move forward
-            linear = 0.0
+            # No depth info - use bounding box size as heuristic
+            bbox_width = x_max - x_min
+            bbox_height = y_max - y_min
+            bbox_area = bbox_width * bbox_height
+            image_area = image_width * (y_max - y_min)  # Approximate
+            
+            # If person takes up significant portion of image, assume close enough
+            area_ratio = bbox_area / (image_width * image_width)  # Normalize
+            
+            close_enough = area_ratio > 0.15  # Threshold (adjust based on testing)
+            
+            # Move forward if aligned and not close enough
+            if aligned and not close_enough:
+                linear = self.max_linear_speed * 0.5  # Moderate speed
+            else:
+                linear = 0.0
         
-        # Check if close enough
-        close_enough = abs(distance_error) < self.distance_threshold
+        # If close enough and aligned, stop
+        if aligned and close_enough:
+            direction = 'STOP'
+            linear = 0.0
+            angular = 0.0
         
         return {
             'linear': linear,
             'angular': angular,
+            'direction': direction,
             'aligned': aligned,
             'close_enough': close_enough,
-            'distance_error': distance_error,
-            'angle_error': normalized_error
+            'error_x': normalized_error
         }
     
-    def is_ready_for_interaction(self, person_bbox, image_width, distance_to_person):
+    def is_ready_for_interaction(self, person_bbox, image_width, distance_to_person=None):
         """
         Check if car is ready for interaction (aligned and at target distance)
         
@@ -119,7 +148,7 @@ class PersonFollower:
         Returns:
             bool: True if ready for interaction
         """
-        if person_bbox is None or distance_to_person is None:
+        if person_bbox is None:
             return False
         
         control = self.compute_control(person_bbox, image_width, distance_to_person)
@@ -144,10 +173,11 @@ class SearchController:
         Compute control for search behavior (slow rotation in place)
         
         Returns:
-            dict: Control commands with 'linear' and 'angular'
+            dict: Control commands with 'linear', 'angular', and 'direction'
         """
         return {
             'linear': 0.0,  # No forward movement
-            'angular': self.search_angular_speed  # Rotate slowly
+            'angular': self.search_angular_speed,  # Rotate slowly
+            'direction': 'SEARCH (ROTATE)'
         }
 
