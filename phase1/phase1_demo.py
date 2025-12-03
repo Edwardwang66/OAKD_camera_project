@@ -12,6 +12,8 @@ import numpy as np
 import time
 import os
 import sys
+import threading
+import queue
 
 # Add parent directory to path for utils
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -163,15 +165,21 @@ class Phase1Demo:
         self.distance_to_person = None
         self.last_rps_result = None
         
+        # Terminal input handling
+        self.terminal_input_queue = queue.Queue()
+        self.terminal_input_thread = None
+        self.start_terminal_input_thread()
+        
         print("\n" + "=" * 60)
         print("Initialization complete!")
         print("=" * 60)
         print("\nControls:")
-        print("  'q' - Quit")
-        print("  'i' - Switch to interaction mode (RPS game)")
-        print("  'd' - Switch to detection mode (person + distance)")
-        print("  'r' - Reset RPS game")
-        print("\nStarting demo...\n")
+        print("  'q' or 'quit' - Quit")
+        print("  'i' or 'interaction' - Switch to interaction mode (RPS game)")
+        print("  'd' or 'detection' - Switch to detection mode (person + distance)")
+        print("  'r' or 'reset' - Reset RPS game")
+        print("\nNote: You can type commands in the terminal or press keys in the OpenCV window")
+        print("Starting demo...\n")
     
     def run(self):
         """Main demo loop"""
@@ -264,20 +272,43 @@ class Phase1Demo:
             if frame_count % 30 == 0:  # Print every 30 frames
                 self._print_status()
             
-            # Handle keyboard input
+            # Handle keyboard input from OpenCV window
             key = safe_waitkey(1)
-            if key == ord('q'):
-                self.running = False
-            elif key == ord('i'):
-                self.mode = "interaction"
-                print("\n>>> Switched to INTERACTION mode (RPS game)")
-                print("    Show your hand gesture to play!")
-            elif key == ord('d'):
-                self.mode = "detection"
-                print("\n>>> Switched to DETECTION mode (person + distance)")
-            elif key == ord('r'):
-                self.rps_game.reset_game()
-                print("\n>>> RPS game reset!")
+            if key != -1:
+                if key == ord('q'):
+                    self.running = False
+                elif key == ord('i'):
+                    self.mode = "interaction"
+                    print("\n>>> Switched to INTERACTION mode (RPS game)")
+                    print("    Show your hand gesture to play!")
+                elif key == ord('d'):
+                    self.mode = "detection"
+                    print("\n>>> Switched to DETECTION mode (person + distance)")
+                elif key == ord('r'):
+                    self.rps_game.reset_game()
+                    print("\n>>> RPS game reset!")
+            
+            # Handle terminal input (non-blocking)
+            try:
+                while True:
+                    command = self.terminal_input_queue.get_nowait().strip().lower()
+                    if command in ['q', 'quit', 'exit']:
+                        self.running = False
+                        print("\n>>> Quitting...")
+                    elif command in ['i', 'interaction', 'interact']:
+                        self.mode = "interaction"
+                        print("\n>>> Switched to INTERACTION mode (RPS game)")
+                        print("    Show your hand gesture to play!")
+                    elif command in ['d', 'detection', 'detect']:
+                        self.mode = "detection"
+                        print("\n>>> Switched to DETECTION mode (person + distance)")
+                    elif command in ['r', 'reset']:
+                        self.rps_game.reset_game()
+                        print("\n>>> RPS game reset!")
+                    elif command:
+                        print(f"Unknown command: {command}. Type 'q' to quit, 'i' for interaction, 'd' for detection, 'r' to reset")
+            except queue.Empty:
+                pass  # No terminal input available
             
             frame_count += 1
         
@@ -343,9 +374,33 @@ class Phase1Demo:
                 print(f"Last result: {self.last_rps_result['result'].value}")
         print("-" * 40)
     
+    def start_terminal_input_thread(self):
+        """Start a thread to read terminal input"""
+        def read_terminal_input():
+            while self.running:
+                try:
+                    if sys.stdin.isatty():
+                        # Read a line (this will block, but that's OK in a separate thread)
+                        line = sys.stdin.readline()
+                        if line:
+                            self.terminal_input_queue.put(line)
+                    else:
+                        time.sleep(0.1)
+                except (EOFError, KeyboardInterrupt):
+                    break
+                except Exception as e:
+                    # Silently handle errors (e.g., if stdin is closed)
+                    time.sleep(0.1)
+        
+        self.terminal_input_thread = threading.Thread(target=read_terminal_input, daemon=True)
+        self.terminal_input_thread.start()
+    
     def cleanup(self):
         """Clean up resources"""
         print("\nCleaning up...")
+        self.running = False  # Stop terminal input thread
+        if self.terminal_input_thread:
+            self.terminal_input_thread.join(timeout=1.0)
         self.camera.release()
         if hasattr(self.person_detector, 'release'):
             self.person_detector.release()
