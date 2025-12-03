@@ -5,6 +5,11 @@ Includes GUI availability checks for headless/SSH operation
 import os
 import sys
 
+# Force OpenCV to use GTK backend instead of Qt for X11 compatibility
+# This prevents Qt xcb plugin errors with X11 forwarding
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')  # Disable Qt platform
+os.environ.setdefault('OPENCV_VIDEOIO_PRIORITY_MSMF', '0')  # Disable Windows Media Foundation
+
 
 def is_gui_available():
     """
@@ -46,11 +51,24 @@ def safe_imshow(window_name, image, check_gui=True):
     
     try:
         import cv2
+        # Try to use GTK backend if available (better X11 compatibility)
+        # If this fails, OpenCV will try other backends
+        try:
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        except:
+            pass  # Window might already exist or backend issue
         cv2.imshow(window_name, image)
         return True
     except Exception as e:
         error_str = str(e).lower()
-        if "cannot connect to x server" in error_str or "display" in error_str or "no display" in error_str:
+        # Catch Qt/QPA errors and X11 connection errors
+        if any(keyword in error_str for keyword in [
+            "cannot connect to x server", "display", "no display", 
+            "qt.qpa", "qt platform", "xcb", "could not connect to display"
+        ]):
+            return False
+        # Suppress Qt errors silently
+        if "qt" in error_str and "plugin" in error_str:
             return False
         # Other errors, let them propagate
         raise
