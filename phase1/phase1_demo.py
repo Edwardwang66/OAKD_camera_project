@@ -139,8 +139,9 @@ class Phase1Demo:
         # Initialize RPS game
         print("\n[3/3] Initializing RPS game...")
         try:
-            # Try to find model in project-1 directory
-            model_path = os.path.join('project-1', 'rps_model_improved.pth')
+            # Try to find model in project-1 directory (parent directory)
+            parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            model_path = os.path.join(parent_dir, 'project-1', 'rps_model_improved.pth')
             if not os.path.exists(model_path):
                 model_path = None
             self.rps_game = Phase1RPSGame(model_path=model_path, use_model=True)

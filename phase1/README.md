@@ -49,9 +49,12 @@ pip install depthai
 ### Basic Run
 
 ```bash
-# Run from project root directory
+# Run from phase1 directory
 cd phase1
 python phase1_demo.py
+
+# Or from project root
+python phase1/phase1_demo.py
 ```
 
 ### Features
