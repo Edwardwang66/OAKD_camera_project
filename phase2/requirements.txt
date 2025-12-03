@@ -1,0 +1,22 @@
+# Phase 2 Requirements
+# Car Following and Approaching with DonkeyCar and VESC
+
+# Core dependencies (from phase1)
+opencv-python>=4.8.0
+numpy>=1.24.0
+mediapipe>=0.10.0
+six>=1.16.0
+depthai>=2.23.0
+
+# DonkeyCar (optional, for VESC control)
+# Install with: pip install donkeycar
+# Or follow: https://docs.donkeycar.com/
+
+# PySerial (for direct VESC communication, if not using DonkeyCar)
+pyserial>=3.5
+
+# Note: For actual car control, you need:
+# 1. DonkeyCar installed and configured
+# 2. VESC firmware updated and calibrated
+# 3. Proper serial port permissions
+

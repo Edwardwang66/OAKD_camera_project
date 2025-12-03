@@ -31,6 +31,7 @@ class Phase1OAKDCamera:
         self.rgb_queue = None
         self.depth_queue = None
         self.use_oakd = use_oakd
+        self.fallback_camera_id = fallback_camera_id
         self.fallback_camera = None
         self.using_fallback = False
         self.has_depth = False
@@ -62,7 +63,18 @@ class Phase1OAKDCamera:
                 
                 # Create stereo depth node
                 stereo = self.pipeline.create(dai.node.StereoDepth)
-                stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+                # Try different preset modes based on DepthAI version
+                try:
+                    # Try HIGH_DENSITY first (newer versions)
+                    stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+                except AttributeError:
+                    try:
+                        # Fallback to HIGH_ACCURACY (older versions)
+                        stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_ACCURACY)
+                    except AttributeError:
+                        # If neither works, use default settings
+                        print("Warning: Could not set preset mode, using default settings")
+                
                 stereo.setLeftRightCheck(True)
                 stereo.setSubpixel(False)
                 stereo.setExtendedDisparity(False)
@@ -95,7 +107,7 @@ class Phase1OAKDCamera:
                 print("Falling back to regular webcam...")
         
         # Fallback to regular webcam (no depth)
-        self.fallback_camera = cv2.VideoCapture(fallback_camera_id)
+        self.fallback_camera = cv2.VideoCapture(self.fallback_camera_id)
         if not self.fallback_camera.isOpened():
             raise RuntimeError("Could not open any camera (OAK-D or webcam)")
         self.fallback_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
