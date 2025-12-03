@@ -1,5 +1,22 @@
+# OAKD Camera Project - Main Requirements
+# Core dependencies for all projects
+
+# Computer Vision
 opencv-python>=4.8.0
-mediapipe>=0.10.0
 numpy>=1.24.0
+
+# Hand/Pose Detection
+mediapipe>=0.10.0
+six>=1.16.0  # Required by MediaPipe
+
+# OAK-D Camera Support
 depthai>=2.23.0
+
+# Machine Learning (optional, for RPS model)
+# Uncomment if using PyTorch models:
+# torch>=1.13.0
+# torchvision>=0.14.0
+
+# UI (optional, for some projects)
+# pygame>=2.5.0
 

@@ -32,17 +32,49 @@ phase1_demo.py             # Phase 1 main demo program
 
 ## Installation
 
+### Install Dependencies
+
+**Option 1: Using Virtual Environment (Recommended)**
+
 ```bash
-# Basic dependencies
-pip install opencv-python numpy mediapipe
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# OAK-D camera support
-pip install depthai
-
-# RPS model (optional, for more accurate gesture recognition)
-# Model file should be placed in ../project-1/ directory
-# rps_model_improved.pth or rps_model.pth
+# Install dependencies
+pip install -r requirements.txt
 ```
+
+**Option 2: System-wide Installation**
+
+```bash
+# Install all dependencies
+pip install --user -r requirements.txt
+
+# Or install individually:
+pip install --user opencv-python numpy mediapipe depthai six
+
+# For RPS model support (optional):
+pip install --user torch torchvision
+```
+
+**Option 3: Using --break-system-packages (Not Recommended)**
+
+```bash
+pip install --break-system-packages -r requirements.txt
+```
+
+**Note**: The `six` module is required by MediaPipe. If you get a "No module named 'six'" error, install it:
+```bash
+pip install --user six
+# or
+pip install --break-system-packages six
+```
+
+### RPS Model (Optional)
+
+For more accurate gesture recognition, place the model file in `../project-1/`:
+- `rps_model_improved.pth` or `rps_model.pth`
 
 ## Usage
 

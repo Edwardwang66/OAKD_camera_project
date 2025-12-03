@@ -1,0 +1,21 @@
+# Phase 1 Requirements
+# OAK-D Desktop Demo - Person Detection, Distance Estimation, and RPS Game
+
+# Core dependencies
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Person detection (MediaPipe Pose)
+mediapipe>=0.10.0
+six>=1.16.0  # Required by MediaPipe
+
+# OAK-D camera support (with depth)
+depthai>=2.23.0
+
+# PyTorch for RPS model (optional, for better gesture recognition)
+# If not using model, MediaPipe fallback will be used
+torch>=1.13.0
+torchvision>=0.14.0
+
+# Note: Standard library modules (os, sys, time, enum) are included with Python
+# No additional installation needed for: cv2 (opencv-python), numpy, mediapipe, depthai

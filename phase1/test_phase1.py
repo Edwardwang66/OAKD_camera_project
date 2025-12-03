@@ -5,6 +5,48 @@ Tests each module individually
 import sys
 import os
 
+def check_dependencies():
+    """Check if required dependencies are installed"""
+    missing = []
+    
+    try:
+        import cv2
+    except ImportError:
+        missing.append("opencv-python")
+    
+    try:
+        import numpy
+    except ImportError:
+        missing.append("numpy")
+    
+    try:
+        import mediapipe
+    except ImportError:
+        missing.append("mediapipe")
+    
+    try:
+        import six
+    except ImportError:
+        missing.append("six")
+    
+    try:
+        import depthai
+    except ImportError:
+        missing.append("depthai (optional)")
+    
+    if missing:
+        print("\n⚠ Missing dependencies:")
+        for dep in missing:
+            print(f"  - {dep}")
+        print("\nTo install dependencies:")
+        print("  pip install --user -r requirements.txt")
+        print("  or")
+        print("  pip install --break-system-packages -r requirements.txt")
+        print("  or use a virtual environment (recommended)")
+        return False
+    
+    return True
+
 def test_imports():
     """Test if all modules can be imported"""
     print("Testing imports...")
@@ -101,6 +143,15 @@ def main():
     print("Phase 1 Component Tests")
     print("=" * 60)
     
+    # Check dependencies first
+    print("\nChecking dependencies...")
+    if not check_dependencies():
+        print("\n⚠ Please install missing dependencies before running tests.")
+        print("See README.md for installation instructions.")
+        return False
+    
+    print("✓ All dependencies available")
+    
     results = []
     
     # Test imports
@@ -129,6 +180,8 @@ def main():
         print("Run: python phase1_demo.py")
     else:
         print("\n⚠ Some tests failed. Please check the errors above.")
+        print("\nIf you see 'No module named' errors, install dependencies:")
+        print("  pip install --user -r requirements.txt")
     
     return all_passed
 
