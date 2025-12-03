@@ -71,10 +71,52 @@ pip install opencv-python mediapipe numpy
 
 ## Usage
 
+### Standard Usage (Raspberry Pi or with screen):
+
 Run the main application:
 ```bash
 python main.py
 ```
+
+### Laptop Testing with OAKD Camera:
+
+If you have OAKD camera connected to your laptop and want to test:
+
+```bash
+python test_oakd_laptop.py
+```
+
+**This script:**
+- ✅ **Uses OAKD camera ONLY** (no webcam fallback - will error if OAKD not connected)
+- ✅ **Displays on laptop screen** (uses GUI if available)
+- ✅ **Full game functionality** (complete shooting game with referee UI)
+- ✅ **Perfect for testing** OAKD camera functionality on laptop before deploying to Pi
+
+**Requirements:**
+- OAKD Lite camera connected via USB
+- DepthAI installed: `pip install depthai`
+- GUI available (for display on laptop screen)
+
+**Note**: This script will fail if OAKD camera is not connected (unlike `main.py` which falls back to webcam).
+
+**Troubleshooting:**
+
+If you see permission errors like `X_LINK_INSUFFICIENT_PERMISSIONS`:
+
+**On macOS:**
+1. Try running with `sudo`: `sudo python3 test_oakd_laptop.py`
+2. Grant USB permissions in System Preferences > Security & Privacy > Privacy
+3. Check if camera is detected: `python3 -c 'import depthai as dai; print(dai.Device.getAllAvailableDevices())'`
+
+**On Linux:**
+1. Set up udev rules: 
+   ```bash
+   echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"' | sudo tee /etc/udev/rules.d/80-movidius.rules
+   sudo udevadm control --reload-rules
+   sudo udevadm trigger
+   ```
+2. Unplug and replug the OAKD camera
+3. Or add user to dialout group: `sudo usermod -a -G dialout $USER`
 
 ### Controls
 

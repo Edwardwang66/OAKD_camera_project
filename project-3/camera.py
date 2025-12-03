@@ -33,32 +33,29 @@ class Camera:
     def setup_pipeline(self):
         """Set up the camera pipeline"""
         if self.use_oakd and DEPTHAI_AVAILABLE:
-            try:
-                # Create pipeline
-                self.pipeline = dai.Pipeline()
-                
-                # Define source and output
-                cam_rgb = self.pipeline.create(dai.node.ColorCamera)
-                xout_rgb = self.pipeline.create(dai.node.XLinkOut)
-                
-                xout_rgb.setStreamName("rgb")
-                
-                # Properties
-                cam_rgb.setPreviewSize(640, 480)
-                cam_rgb.setInterleaved(False)
-                cam_rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.RGB)
-                
-                # Linking
-                cam_rgb.preview.link(xout_rgb.input)
-                
-                # Connect to device and start pipeline
-                self.device = dai.Device(self.pipeline)
-                self.rgb_queue = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
-                print("OAKD Lite camera initialized successfully")
-                return
-            except Exception as e:
-                print(f"Warning: Could not initialize OAKD camera: {e}")
-                print("Falling back to regular webcam...")
+            # Try multiple API methods for compatibility with different DepthAI versions
+            methods_to_try = [
+                # Method 1: Standard API (most common)
+                lambda: self._setup_pipeline_method1(),
+                # Method 2: Alternative API (for some versions)
+                lambda: self._setup_pipeline_method2(),
+            ]
+            
+            for method in methods_to_try:
+                try:
+                    method()
+                    return  # Success!
+                except (AttributeError, TypeError):
+                    continue  # Try next method
+                except Exception as e:
+                    # Other errors (device not found, etc.)
+                    print(f"Warning: Could not initialize OAKD camera: {e}")
+                    print("Falling back to regular webcam...")
+                    break
+            
+            # If all methods failed, fall back to webcam
+            print("Warning: Could not initialize OAKD camera with any API method")
+            print("Falling back to regular webcam...")
         
         # Fallback to regular webcam
         self.fallback_camera = cv2.VideoCapture(0)
@@ -68,6 +65,39 @@ class Camera:
         self.fallback_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.using_fallback = True
         print("Using fallback webcam")
+    
+    def _setup_pipeline_method1(self):
+        """Method 1: Standard DepthAI API"""
+        self.pipeline = dai.Pipeline()
+        cam_rgb = self.pipeline.create(dai.node.ColorCamera)
+        xout_rgb = self.pipeline.create(dai.node.XLinkOut)
+        
+        xout_rgb.setStreamName("rgb")
+        cam_rgb.setPreviewSize(640, 480)
+        cam_rgb.setInterleaved(False)
+        cam_rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.RGB)
+        cam_rgb.preview.link(xout_rgb.input)
+        
+        self.device = dai.Device(self.pipeline)
+        self.rgb_queue = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+        print("OAKD Lite camera initialized successfully")
+    
+    def _setup_pipeline_method2(self):
+        """Method 2: Alternative DepthAI API (for some versions)"""
+        self.pipeline = dai.Pipeline()
+        # Try using createColorCamera and createXLinkOut methods directly
+        cam_rgb = self.pipeline.createColorCamera()
+        xout_rgb = self.pipeline.createXLinkOut()
+        
+        xout_rgb.setStreamName("rgb")
+        cam_rgb.setPreviewSize(640, 480)
+        cam_rgb.setInterleaved(False)
+        cam_rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.RGB)
+        cam_rgb.preview.link(xout_rgb.input)
+        
+        self.device = dai.Device(self.pipeline)
+        self.rgb_queue = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+        print("OAKD Lite camera initialized successfully (using alternative API)")
     
     def get_frame(self):
         """
