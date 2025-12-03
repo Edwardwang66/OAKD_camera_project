@@ -286,8 +286,8 @@ class Phase1Demo:
                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             
             # Mode-specific processing
-            if self.mode == "interaction" and person_found:
-                # Detect gesture using project-1 gesture detector
+            if self.mode == "interaction":
+                # Detect gesture using project-1 gesture detector (use original frame)
                 result = self.gesture_detector.detect_gesture(frame)
                 
                 # Handle different return formats
@@ -295,11 +295,14 @@ class Phase1Demo:
                     if len(result) >= 2:
                         gesture = result[0]
                         annotated_frame = result[1]
-                        display_frame = annotated_frame
+                        # Use annotated frame for camera display (has hand detection overlay)
+                        camera_frame_for_ui = annotated_frame
                     else:
                         gesture = result[0]
+                        camera_frame_for_ui = frame
                 else:
                     gesture = result
+                    camera_frame_for_ui = frame
                 
                 # Update current gesture
                 if gesture != Gesture.NONE:
@@ -312,8 +315,8 @@ class Phase1Demo:
                     self.current_player_gesture = Gesture.NONE
                     self.gesture_hold_time = 0
                 
-                # Play round if gesture held long enough
-                if (self.gesture_hold_time >= self.gesture_hold_threshold and 
+                # Play round if gesture held long enough (only if person detected)
+                if person_found and (self.gesture_hold_time >= self.gesture_hold_threshold and 
                     self.current_player_gesture != Gesture.NONE and
                     self.game.result is None):
                     # Play the round
@@ -330,9 +333,32 @@ class Phase1Demo:
                     self.game.reset_round()
                     self.last_rps_result = None
                 
-                # Use project-1 UI to create display
+                # Add person detection overlay to camera frame if person found
+                if person_found and person_bbox:
+                    # Draw person bbox on camera frame
+                    x_min, y_min, x_max, y_max = person_bbox
+                    cv2.rectangle(camera_frame_for_ui, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+                    cv2.putText(camera_frame_for_ui, "Person Detected", (x_min, y_min - 10),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    
+                    # Draw distance if available
+                    if self.distance_to_person is not None:
+                        distance_text = f"Distance: {self.distance_to_person:.2f}m"
+                        cv2.putText(camera_frame_for_ui, distance_text, (x_min, y_max + 25),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                else:
+                    # Draw "No person detected" message
+                    h, w = camera_frame_for_ui.shape[:2]
+                    text = "No person detected - Show yourself to play!"
+                    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
+                    text_x = (w - text_size[0]) // 2
+                    text_y = h // 2
+                    cv2.putText(camera_frame_for_ui, text, (text_x, text_y),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                
+                # Use project-1 UI to create display (always use original frame dimensions)
                 display_frame = self.ui.create_display(
-                    camera_frame=display_frame,
+                    camera_frame=camera_frame_for_ui,
                     player_gesture=self.current_player_gesture,
                     ai_gesture=self.game.ai_choice,
                     game_result=self.last_rps_result,
@@ -384,7 +410,7 @@ class Phase1Demo:
                     self.mode = "detection"
                     print("\n>>> Switched to DETECTION mode (person + distance)")
                 elif key == ord('r'):
-                    self.rps_game.reset_game()
+                    self.game.reset_game()
                     print("\n>>> RPS game reset!")
             
             # Handle terminal input (non-blocking)
