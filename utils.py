@@ -5,10 +5,8 @@ Includes GUI availability checks for headless/SSH operation
 import os
 import sys
 
-# Force OpenCV to use GTK backend instead of Qt for X11 compatibility
-# This prevents Qt xcb plugin errors with X11 forwarding
-os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')  # Disable Qt platform
-os.environ.setdefault('OPENCV_VIDEOIO_PRIORITY_MSMF', '0')  # Disable Windows Media Foundation
+# Note: We don't set QT_QPA_PLATFORM=offscreen here because OpenCV's Qt plugin
+# may not have that backend. Instead, we catch Qt errors gracefully at runtime.
 
 
 def is_gui_available():

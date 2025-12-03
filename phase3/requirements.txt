@@ -1,0 +1,22 @@
+# Phase 3 Requirements for Raspberry Pi 5
+# Person Following with Obstacle Avoidance using OAKD Lite Camera
+# Based on Phase 2, adds obstacle avoidance functionality
+
+# Core dependencies
+opencv-python>=4.8.0
+numpy>=1.24.0
+depthai>=2.23.0
+blobconverter>=1.0.0  # Required for person detection and depth support
+mediapipe>=0.10.0  # Fallback for person detection
+
+# For VESC control (optional, install separately)
+# pyserial>=3.5
+# donkeycar (install separately: https://docs.donkeycar.com/)
+
+# Note: For actual car control, you need:
+# 1. DonkeyCar installed and configured on Raspberry Pi
+# 2. VESC firmware updated and calibrated
+# 3. Proper serial port permissions: sudo usermod -a -G dialout $USER
+
+# Phase 3 shares modules with Phase 2 (oakd_camera, car_controller, person_follower)
+# These modules are located in ../phase2/ directory
