@@ -15,35 +15,15 @@ import sys
 import threading
 import queue
 
-# Add parent directory to path for utils and project-1
+# Add parent directory to path for utils
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
-project1_path = os.path.join(parent_dir, 'project-1')
-sys.path.insert(0, project1_path)
-
 from utils import is_gui_available, safe_imshow, safe_waitkey, print_gui_warning
 
 # Import Phase 1 modules
 from phase1_oakd_camera import Phase1OAKDCamera
 from phase1_person_detector import PersonDetector, PersonDetectorFallback
-
-# Import project-1 RPS game components
-from game_logic import RockPaperScissorsGame, GameResult
-from ui_display import GameUI
-
-# Try to use model-based detector, fallback to MediaPipe
-try:
-    from hand_gesture_detector_model import HandGestureDetectorModel
-    from model_loader import Gesture
-    USE_MODEL = True
-except (ImportError, FileNotFoundError):
-    try:
-        from hand_gesture_detector import HandGestureDetector, Gesture
-        USE_MODEL = False
-    except ImportError:
-        print("Warning: Could not import gesture detector")
-        Gesture = None
-        USE_MODEL = False
+from phase1_rps_game import Phase1RPSGame
 
 
 class SimplePersonDetector:
@@ -158,62 +138,24 @@ class Phase1Demo:
             print("Using simple detector...")
             self.person_detector = SimplePersonDetector()
         
-        # Initialize RPS game (using project-1 components)
+        # Initialize RPS game
         print("\n[3/3] Initializing RPS game...")
-        self.game = RockPaperScissorsGame()
-        self.ui = GameUI(screen_width=800, screen_height=480)
-        
-        # Initialize gesture detector
         try:
-            # Try to find model in project-1 directory
+            # Try to find model in project-1 directory (parent directory)
             parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             model_path = os.path.join(parent_dir, 'project-1', 'rps_model_improved.pth')
             if not os.path.exists(model_path):
                 model_path = None
-            
-            if USE_MODEL and model_path and os.path.exists(model_path):
-                try:
-                    self.gesture_detector = HandGestureDetectorModel(model_path=model_path)
-                    print("Using trained PyTorch model for gesture detection")
-                except Exception as e:
-                    print(f"Failed to load model: {e}")
-                    print("Falling back to MediaPipe...")
-                    from hand_gesture_detector import HandGestureDetector
-                    self.gesture_detector = HandGestureDetector()
-            else:
-                from hand_gesture_detector import HandGestureDetector
-                self.gesture_detector = HandGestureDetector()
-                print("Using MediaPipe for gesture detection")
+            self.rps_game = Phase1RPSGame(model_path=model_path, use_model=True)
         except Exception as e:
-            print(f"Warning: Could not initialize gesture detector: {e}")
-            raise
+            print(f"Warning: Could not initialize RPS game with model: {e}")
+            print("Falling back to MediaPipe-based detection...")
+            self.rps_game = Phase1RPSGame(use_model=False)
         
-        # Check GUI availability and XQuartz
+        # Check GUI availability
         self.gui_available = is_gui_available()
-        display = os.environ.get("DISPLAY")
-        if display:
-            print(f"✓ Display detected: {display}")
-            print("  XQuartz display should work correctly")
-        else:
-            print("⚠ Warning: DISPLAY not set. XQuartz may not work.")
-            print("  Set DISPLAY=:0 or ensure XQuartz is running")
-            print("  On Mac: export DISPLAY=:0")
-        
         if not self.gui_available:
             print_gui_warning()
-        else:
-            # Test XQuartz connection
-            try:
-                import cv2
-                test_img = np.zeros((100, 100, 3), dtype=np.uint8)
-                cv2.namedWindow("XQuartz Test", cv2.WINDOW_NORMAL)
-                cv2.imshow("XQuartz Test", test_img)
-                cv2.waitKey(1)
-                cv2.destroyWindow("XQuartz Test")
-                print("✓ XQuartz connection test successful")
-            except Exception as e:
-                print(f"⚠ XQuartz test failed: {e}")
-                print("  Windows may still work, but check XQuartz settings")
         
         # Demo state
         self.running = True
@@ -222,11 +164,6 @@ class Phase1Demo:
         self.person_bbox = None
         self.distance_to_person = None
         self.last_rps_result = None
-        
-        # RPS game state (using project-1 style)
-        self.current_player_gesture = Gesture.NONE if Gesture else None
-        self.gesture_hold_time = 0
-        self.gesture_hold_threshold = 30  # Frames to hold gesture before playing
         
         # Terminal input handling
         self.terminal_input_queue = queue.Queue()
@@ -286,110 +223,48 @@ class Phase1Demo:
                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             
             # Mode-specific processing
-            if self.mode == "interaction":
-                # Detect gesture using project-1 gesture detector (use original frame)
-                result = self.gesture_detector.detect_gesture(frame)
+            if self.mode == "interaction" and person_found:
+                # Play RPS game
+                rps_result = self.rps_game.play_round(frame)
                 
-                # Handle different return formats
-                if isinstance(result, tuple):
-                    if len(result) >= 2:
-                        gesture = result[0]
-                        annotated_frame = result[1]
-                        # Use annotated frame for camera display (has hand detection overlay)
-                        camera_frame_for_ui = annotated_frame
-                    else:
-                        gesture = result[0]
-                        camera_frame_for_ui = frame
-                else:
-                    gesture = result
-                    camera_frame_for_ui = frame
-                
-                # Update current gesture
-                if gesture != Gesture.NONE:
-                    if gesture == self.current_player_gesture:
-                        self.gesture_hold_time += 1
-                    else:
-                        self.current_player_gesture = gesture
-                        self.gesture_hold_time = 1
-                else:
-                    self.current_player_gesture = Gesture.NONE
-                    self.gesture_hold_time = 0
-                
-                # Play round if gesture held long enough (only if person detected)
-                if person_found and (self.gesture_hold_time >= self.gesture_hold_threshold and 
-                    self.current_player_gesture != Gesture.NONE and
-                    self.game.result is None):
-                    # Play the round
-                    self.last_rps_result = self.game.play_round(self.current_player_gesture)
-                    if self.last_rps_result is not None:
-                        print(f"Round {self.game.round_count}: "
-                              f"Player: {self.current_player_gesture.value}, "
-                              f"AI: {self.game.ai_choice.value}, "
-                              f"Result: {self.last_rps_result.value}")
-                
-                # Reset round after showing result for a while
-                if self.last_rps_result and self.gesture_hold_time < 10:
-                    # Reset for next round
-                    self.game.reset_round()
-                    self.last_rps_result = None
-                
-                # Add person detection overlay to camera frame if person found
-                if person_found and person_bbox:
-                    # Draw person bbox on camera frame
-                    x_min, y_min, x_max, y_max = person_bbox
-                    cv2.rectangle(camera_frame_for_ui, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-                    cv2.putText(camera_frame_for_ui, "Person Detected", (x_min, y_min - 10),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                    
-                    # Draw distance if available
-                    if self.distance_to_person is not None:
-                        distance_text = f"Distance: {self.distance_to_person:.2f}m"
-                        cv2.putText(camera_frame_for_ui, distance_text, (x_min, y_max + 25),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                else:
-                    # Draw "No person detected" message
-                    h, w = camera_frame_for_ui.shape[:2]
-                    text = "No person detected - Show yourself to play!"
-                    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
-                    text_x = (w - text_size[0]) // 2
-                    text_y = h // 2
-                    cv2.putText(camera_frame_for_ui, text, (text_x, text_y),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                
-                # Use project-1 UI to create display (always use original frame dimensions)
-                display_frame = self.ui.create_display(
-                    camera_frame=camera_frame_for_ui,
-                    player_gesture=self.current_player_gesture,
-                    ai_gesture=self.game.ai_choice,
-                    game_result=self.last_rps_result,
-                    player_score=self.game.player_score,
-                    ai_score=self.game.ai_score,
-                    round_count=self.game.round_count
-                )
-            else:
-                # Detection mode - draw overlays on camera frame
-                # Draw mode indicator
-                mode_text = f"Mode: {self.mode.upper()}"
-                if self.mode == "interaction":
-                    mode_color = (0, 255, 0)
-                else:
-                    mode_color = (255, 255, 0)
-                
-                cv2.putText(display_frame, mode_text, (10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, mode_color, 2)
-                
-                # Draw person status
-                if person_found:
-                    status_text = "Person: DETECTED"
-                    status_color = (0, 255, 0)
-                else:
-                    status_text = "Person: NOT DETECTED"
-                    status_color = (0, 0, 255)
-                
-                cv2.putText(display_frame, status_text, (10, 90),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+                # Display RPS results
+                if rps_result['result'] is not None:
+                    self.last_rps_result = rps_result
+                    self._draw_rps_result(display_frame, rps_result)
+                elif rps_result['player_gesture'].value != 'none':
+                    # Show current gesture being detected
+                    gesture_text = f"Gesture: {rps_result['player_gesture'].value.upper()}"
+                    cv2.putText(display_frame, gesture_text, (10, 60),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
             
-            # Show display (will output to XQuartz if DISPLAY is set)
+            # Draw mode indicator
+            mode_text = f"Mode: {self.mode.upper()}"
+            if self.mode == "interaction":
+                mode_color = (0, 255, 0)
+            else:
+                mode_color = (255, 255, 0)
+            
+            cv2.putText(display_frame, mode_text, (10, 30),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, mode_color, 2)
+            
+            # Draw person status
+            if person_found:
+                status_text = "Person: DETECTED"
+                status_color = (0, 255, 0)
+            else:
+                status_text = "Person: NOT DETECTED"
+                status_color = (0, 0, 255)
+            
+            cv2.putText(display_frame, status_text, (10, 90),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+            
+            # Draw RPS score if in interaction mode
+            if self.mode == "interaction":
+                score_text = f"Score: Player {self.rps_game.game.player_score} - AI {self.rps_game.game.ai_score}"
+                cv2.putText(display_frame, score_text, (10, 120),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            # Show display
             if self.gui_available:
                 safe_imshow("Phase 1: OAK-D Demo", display_frame)
             
@@ -410,7 +285,7 @@ class Phase1Demo:
                     self.mode = "detection"
                     print("\n>>> Switched to DETECTION mode (person + distance)")
                 elif key == ord('r'):
-                    self.game.reset_game()
+                    self.rps_game.reset_game()
                     print("\n>>> RPS game reset!")
             
             # Handle terminal input (non-blocking)
@@ -428,7 +303,7 @@ class Phase1Demo:
                         self.mode = "detection"
                         print("\n>>> Switched to DETECTION mode (person + distance)")
                     elif command in ['r', 'reset']:
-                        self.game.reset_game()
+                        self.rps_game.reset_game()
                         print("\n>>> RPS game reset!")
                     elif command:
                         print(f"Unknown command: {command}. Type 'q' to quit, 'i' for interaction, 'd' for detection, 'r' to reset")
@@ -439,6 +314,51 @@ class Phase1Demo:
         
         print("\nDemo ended.")
     
+    def _draw_rps_result(self, frame, rps_result):
+        """Draw RPS game result on frame"""
+        result = rps_result['result']
+        player_gesture = rps_result['player_gesture']
+        ai_gesture = rps_result['ai_gesture']
+        
+        if result is None:
+            return
+        
+        # Draw result in center of frame
+        h, w = frame.shape[:2]
+        center_x, center_y = w // 2, h // 2
+        
+        # Result text
+        if result.value == "player_wins":
+            result_text = "YOU WIN!"
+            result_color = (0, 255, 0)
+        elif result.value == "ai_wins":
+            result_text = "AI WINS!"
+            result_color = (0, 0, 255)
+        else:
+            result_text = "TIE!"
+            result_color = (255, 255, 0)
+        
+        # Draw background rectangle
+        text_size = cv2.getTextSize(result_text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)[0]
+        rect_x = center_x - text_size[0] // 2 - 20
+        rect_y = center_y - text_size[1] // 2 - 20
+        rect_w = text_size[0] + 40
+        rect_h = text_size[1] + 40
+        
+        cv2.rectangle(frame, (rect_x, rect_y), (rect_x + rect_w, rect_y + rect_h),
+                     (0, 0, 0), -1)
+        cv2.rectangle(frame, (rect_x, rect_y), (rect_x + rect_w, rect_y + rect_h),
+                     result_color, 3)
+        
+        # Draw result text
+        cv2.putText(frame, result_text, (center_x - text_size[0] // 2, center_y + text_size[1] // 2),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.5, result_color, 3)
+        
+        # Draw gestures
+        gesture_text = f"Player: {player_gesture.value.upper()} vs AI: {ai_gesture.value.upper()}"
+        gesture_size = cv2.getTextSize(gesture_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
+        cv2.putText(frame, gesture_text, (center_x - gesture_size[0] // 2, center_y + 60),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
     
     def _print_status(self):
         """Print current status to terminal"""
@@ -449,9 +369,9 @@ class Phase1Demo:
         if self.distance_to_person is not None:
             print(f"Distance to person: {self.distance_to_person:.2f}m")
         if self.mode == "interaction":
-            print(f"RPS Score: Player {self.game.player_score} - AI {self.game.ai_score}")
-            if self.last_rps_result:
-                print(f"Last result: {self.last_rps_result.value}")
+            print(f"RPS Score: Player {self.rps_game.game.player_score} - AI {self.rps_game.game.ai_score}")
+            if self.last_rps_result and self.last_rps_result['result']:
+                print(f"Last result: {self.last_rps_result['result'].value}")
         print("-" * 40)
     
     def start_terminal_input_thread(self):
@@ -484,8 +404,7 @@ class Phase1Demo:
         self.camera.release()
         if hasattr(self.person_detector, 'release'):
             self.person_detector.release()
-        if hasattr(self, 'gesture_detector') and hasattr(self.gesture_detector, 'release'):
-            self.gesture_detector.release()
+        self.rps_game.release()
         if self.gui_available:
             try:
                 cv2.destroyAllWindows()
