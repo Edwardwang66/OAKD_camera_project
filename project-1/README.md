@@ -4,11 +4,10 @@ A real-time rock-paper-scissors game that uses the OAKD Lite camera to detect ha
 
 ## Features
 
-- **Hand Gesture Recognition**: Uses trained PyTorch model or MediaPipe to detect rock, paper, or scissors gestures
-- **Bounding Box Detection**: Detects hand region with bounding box (x, y, w, h) for improved accuracy
-- **Model-Based Classification**: Uses trained model from ECE176_final project for gesture recognition
+- **Hand Gesture Recognition**: Uses MediaPipe hand pose detection to detect rock, paper, or scissors gestures
+- **Pose-Based Classification**: Determines gestures based on finger keypoints/landmarks (not bounding boxes)
+- **Real-time Detection**: Fast and efficient gesture recognition using MediaPipe hand landmarks
 - **OAKD Camera Integration**: Captures video from the OAKD Lite camera using DepthAI
-- **OAKD Edge AI Support**: Optional - run model inference on OAKD's built-in Myriad X VPU
 - **Game Logic**: Full rock-paper-scissors game with AI opponent (Donkey Car)
 - **UI Display**: Beautiful game interface optimized for 7-inch screen (800x480)
 - **Score Tracking**: Keeps track of player and AI scores across multiple rounds
@@ -24,9 +23,11 @@ A real-time rock-paper-scissors game that uses the OAKD Lite camera to detect ha
 
 - Python 3.8+
 - OpenCV
-- MediaPipe
+- MediaPipe (for hand pose detection)
 - DepthAI (for OAKD camera)
 - NumPy
+
+**Note**: This project uses MediaPipe hand pose detection only. No neural network models are required.
 
 ## Installation
 
@@ -116,40 +117,24 @@ OAKD_camera_project/
 ## How It Works
 
 1. **Camera Capture**: The `OAKDCamera` class captures RGB frames from the OAKD Lite camera using DepthAI
-2. **Hand Detection**: MediaPipe detects hand and returns bounding box (x, y, w, h)
-3. **Region Cropping**: Hand region is cropped based on bounding box
-4. **Gesture Classification**: 
-   - **Model-based**: Trained PyTorch model classifies the cropped hand region
-   - **MediaPipe fallback**: Uses finger position rules if model not available
-5. **Game Logic**: The `RockPaperScissorsGame` class manages game state, AI opponent choices, and result calculation
-6. **UI Display**: The `GameUI` class creates a split-screen display showing the camera feed with bounding box and game information
-7. **Main Loop**: The `RockPaperScissorsApp` coordinates all components in a real-time game loop
+2. **Hand Pose Detection**: MediaPipe detects hand landmarks (21 keypoints) in real-time
+3. **Gesture Classification**: Based on finger keypoint positions, determines if gesture is Rock, Paper, or Scissors:
+   - **Rock**: All fingers closed (fist)
+   - **Paper**: All 5 fingers extended
+   - **Scissors**: Only index and middle fingers extended
+4. **Game Logic**: The `RockPaperScissorsGame` class manages game state, AI opponent choices, and result calculation
+5. **UI Display**: The `GameUI` class creates a split-screen display showing the camera feed with hand landmarks and game information
+6. **Main Loop**: The `RockPaperScissorsApp` coordinates all components in a real-time game loop
 
-## Bounding Box Detection
+## Gesture Detection Method
 
-The system now uses bounding box detection for improved accuracy:
+The system uses **MediaPipe hand pose detection** (not bounding boxes or neural networks):
 
-- **Hand Detection**: MediaPipe detects hand and returns bounding box coordinates
-- **Region Cropping**: Only the hand region is processed by the model
-- **Visualization**: Bounding box is drawn on the frame (green rectangle)
-- **Improved Accuracy**: Focusing on hand region reduces background interference
-
-See [USAGE_BBOX.md](USAGE_BBOX.md) for detailed bounding box usage.
-
-## OAKD Edge AI (Optional)
-
-You can run the model directly on the OAKD camera's built-in VPU:
-
-1. **Convert Model**: Convert PyTorch model to Blob format
-2. **Deploy**: Load blob model on OAKD camera
-3. **Run**: Model inference happens on camera, not host CPU
-
-**Benefits**:
-- Lower latency
-- Frees host CPU
-- Better real-time performance
-
-See [README_OAKD_EDGE_AI.md](README_OAKD_EDGE_AI.md) for Edge AI setup instructions.
+- **Hand Landmarks**: MediaPipe detects 21 hand keypoints in real-time
+- **Pose-Based Classification**: Gestures are determined by analyzing finger keypoint positions
+- **No Model Required**: Uses rule-based classification based on finger extension
+- **Real-time Performance**: Fast and efficient, no model inference overhead
+- **Visualization**: Hand landmarks and connections are drawn on the frame
 
 ## Troubleshooting
 

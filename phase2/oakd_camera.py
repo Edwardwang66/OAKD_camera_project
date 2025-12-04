@@ -5,6 +5,7 @@ Designed for Raspberry Pi 5 with X11 forwarding
 """
 import cv2
 import numpy as np
+import time
 
 # Try to import depthai
 try:
@@ -182,7 +183,14 @@ class OAKDCamera:
             self.detection_nn.out.link(xout_nn.input)
             
             # Connect to device
+            print("[OAKDCamera] Connecting to device...")
             self.device = dai.Device(self.pipeline)
+            
+            # Give device time to initialize (important to prevent X_LINK_ERROR)
+            time.sleep(0.5)
+            
+            # Create queues with proper configuration
+            # Use blocking=False to prevent hanging, but flush old frames
             self.rgb_queue = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
             self.nn_queue = self.device.getOutputQueue(name="nn", maxSize=4, blocking=False)
             
@@ -193,7 +201,17 @@ class OAKDCamera:
                 self.depth_queue = None
                 print("[OAKDCamera] Camera initialized successfully with DepthAI person detection (no depth)")
             
+            # Flush initial frames to clear any stale data
+            print("[OAKDCamera] Flushing initial frames...")
+            for _ in range(5):
+                self.rgb_queue.tryGet()
+                self.nn_queue.tryGet()
+                if self.has_depth and self.depth_queue:
+                    self.depth_queue.tryGet()
+                time.sleep(0.1)
+            
             self.available = True
+            print("[OAKDCamera] Device ready!")
             
         except Exception as e:
             print(f"[OAKDCamera] Error setting up DepthAI detection: {e}")
@@ -232,7 +250,16 @@ class OAKDCamera:
             cam_rgb.preview.link(xout_rgb.input)
             
             self.device = dai.Device(self.pipeline)
+            
+            # Give device time to initialize
+            time.sleep(0.5)
+            
             self.rgb_queue = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+            
+            # Flush initial frames
+            for _ in range(5):
+                self.rgb_queue.tryGet()
+                time.sleep(0.1)
             
             # Initialize MediaPipe Pose
             self.mp_pose = mp.solutions.pose
@@ -264,10 +291,31 @@ class OAKDCamera:
         if not self.available or self.rgb_queue is None:
             return None
         
-        in_rgb = self.rgb_queue.tryGet()
-        if in_rgb is not None:
-            frame = in_rgb.getCvFrame()
-            return frame
+        try:
+            in_rgb = self.rgb_queue.tryGet()
+            if in_rgb is not None:
+                frame = in_rgb.getCvFrame()
+                return frame
+        except RuntimeError as e:
+            error_msg = str(e)
+            # Handle X_LINK_ERROR gracefully
+            if 'X_LINK_ERROR' in error_msg or 'Communication exception' in error_msg:
+                # This can happen if queue overflows - just skip this frame
+                # Clear the queue to prevent further errors
+                try:
+                    while self.rgb_queue.tryGet() is not None:
+                        pass
+                except:
+                    pass
+                return None
+            else:
+                # Re-raise other runtime errors
+                raise
+        except Exception as e:
+            # Log unexpected errors but don't crash
+            print(f"[OAKDCamera] Unexpected error in get_frame: {e}")
+            return None
+        
         return None
     
     def detect_person(self):
@@ -301,7 +349,21 @@ class OAKDCamera:
             return False, None, annotated_frame
         
         # Get detection results
-        in_nn = self.nn_queue.tryGet()
+        try:
+            in_nn = self.nn_queue.tryGet()
+        except RuntimeError as e:
+            error_msg = str(e)
+            if 'X_LINK_ERROR' in error_msg or 'Communication exception' in error_msg:
+                # Clear the queue and continue
+                try:
+                    while self.nn_queue.tryGet() is not None:
+                        pass
+                except:
+                    pass
+                return False, None, annotated_frame
+            else:
+                raise
+        
         if in_nn is not None:
             h, w = frame.shape[:2]
             

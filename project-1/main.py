@@ -1,7 +1,7 @@
 """
 Main Application for Rock-Paper-Scissors Game
 Integrates OAKD camera, hand gesture detection, game logic, and UI display
-Uses trained PyTorch model from ECE176_final project
+Uses MediaPipe hand pose detection (no neural network)
 """
 import cv2
 import time
@@ -12,58 +12,25 @@ from utils import is_gui_available, safe_imshow, safe_waitkey, print_gui_warning
 from oakd_camera import OAKDCamera
 from game_logic import RockPaperScissorsGame
 from ui_display import GameUI
-
-# Try to use model-based detector, fallback to MediaPipe
-try:
-    from hand_gesture_detector_model import HandGestureDetectorModel
-    from model_loader import Gesture
-    USE_MODEL = True
-    print("Using trained PyTorch model for gesture detection")
-except (ImportError, FileNotFoundError) as e:
-    print(f"Model not available ({e}), falling back to MediaPipe...")
-    from hand_gesture_detector import HandGestureDetector, Gesture
-    USE_MODEL = False
+from hand_gesture_detector import HandGestureDetector, Gesture
 
 
 class RockPaperScissorsApp:
-    def __init__(self, model_path=None, use_model=True):
+    def __init__(self):
         """
         Initialize the application
-        
-        Args:
-            model_path: Path to model file (optional, will auto-detect)
-            use_model: Whether to use model (True) or MediaPipe (False)
+        Uses MediaPipe hand pose detection (no neural network)
         """
         print("Initializing Rock-Paper-Scissors Game...")
+        print("Using MediaPipe hand pose detection")
         
         # Initialize components
         # Use OAKD camera (will fallback to webcam if not available)
         self.camera = OAKDCamera()
         
-        # Initialize hand detector for bounding boxes
-        try:
-            from oakd_hand_detector import OAKDHandDetector
-            self.hand_detector = OAKDHandDetector()
-            self.use_hand_detection = True
-            print("Hand detection with bounding boxes enabled")
-        except Exception as e:
-            print(f"Hand detector not available: {e}")
-            self.hand_detector = None
-            self.use_hand_detection = False
-        
-        # Initialize gesture detector
-        if use_model and USE_MODEL:
-            try:
-                self.gesture_detector = HandGestureDetectorModel(model_path=model_path)
-                print("Using trained PyTorch model")
-            except Exception as e:
-                print(f"Failed to load model: {e}")
-                print("Falling back to MediaPipe...")
-                from hand_gesture_detector import HandGestureDetector
-                self.gesture_detector = HandGestureDetector()
-        else:
-            from hand_gesture_detector import HandGestureDetector
-            self.gesture_detector = HandGestureDetector()
+        # Initialize gesture detector using MediaPipe hand pose
+        self.gesture_detector = HandGestureDetector()
+        print("MediaPipe hand pose detector initialized")
         
         self.game = RockPaperScissorsGame()
         self.ui = GameUI(screen_width=800, screen_height=480)
@@ -97,45 +64,8 @@ class RockPaperScissorsApp:
                 time.sleep(0.01)
                 continue
             
-            # Detect gesture (hand detector already includes bbox detection)
-            result = self.gesture_detector.detect_gesture(frame)
-            
-            # Handle different return formats
-            if isinstance(result, tuple):
-                if len(result) == 3:
-                    gesture, annotated_frame, bbox = result
-                elif len(result) == 2:
-                    gesture, annotated_frame = result
-                    bbox = None
-                else:
-                    gesture = result[0]
-                    annotated_frame = result[1] if len(result) > 1 else frame
-                    bbox = None
-            else:
-                gesture = result
-                annotated_frame = frame
-                bbox = None
-            
-            # Additional bounding box drawing if hand detector available
-            if self.use_hand_detection and self.hand_detector and bbox is None:
-                # Try to get bbox from hand detector
-                try:
-                    bbox, landmarks, frame_with_bbox = self.hand_detector.detect_hand_bbox(frame)
-                    if bbox:
-                        # Merge annotations
-                        x, y, w, h = bbox
-                        cv2.rectangle(annotated_frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
-                        cv2.putText(annotated_frame, "Hand BBox", (x, y-10),
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-                except:
-                    pass
-            
-            # Draw bounding box if available from gesture detector
-            if bbox:
-                x, y, w, h = bbox
-                cv2.rectangle(annotated_frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-                cv2.putText(annotated_frame, "Model Input Region", (x, y-10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            # Detect gesture using MediaPipe hand pose
+            gesture, annotated_frame = self.gesture_detector.detect_gesture(frame)
             
             # Update current gesture
             if gesture != Gesture.NONE:
