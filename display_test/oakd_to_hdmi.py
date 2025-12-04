@@ -194,42 +194,11 @@ class FramebufferDisplay:
             self.bits_per_pixel = 24
             self.format = 'RGB24'
         
-        # Check actual device size
-        try:
-            import os
-            device_size = os.path.getsize(self.fb_path)
-            print(f"Framebuffer device size: {device_size} bytes")
-            print(f"Calculated frame size: {self.fb_size} bytes")
-            
-            if device_size < self.fb_size:
-                print(f"⚠ Warning: Device size ({device_size}) is smaller than calculated size ({self.fb_size})")
-                print(f"   Adjusting to device size...")
-                # Adjust to fit device size
-                if device_size % (width * height) == 0:
-                    # Can determine bytes per pixel from device size
-                    actual_bpp = device_size // (width * height)
-                    if actual_bpp == 3:
-                        self.bits_per_pixel = 24
-                        self.format = 'RGB24'
-                        self.fb_size = width * height * 3
-                    elif actual_bpp == 4:
-                        self.bits_per_pixel = 32
-                        self.format = 'RGBA32'
-                        self.fb_size = width * height * 4
-                    else:
-                        print(f"   Unusual bytes per pixel: {actual_bpp}, using RGB24")
-                        self.bits_per_pixel = 24
-                        self.format = 'RGB24'
-                        self.fb_size = width * height * 3
-                else:
-                    # Can't determine, use safe default
-                    print(f"   Using safe default: RGB24")
-                    self.bits_per_pixel = 24
-                    self.format = 'RGB24'
-                    self.fb_size = width * height * 3
-        except Exception as e:
-            print(f"Could not check device size: {e}")
-            # Continue with calculated size
+        # Note: Device files don't report size correctly, so we'll use calculated size
+        # and handle write errors gracefully
+        print(f"Calculated frame size: {self.fb_size} bytes ({self.format})")
+        self.write_enabled = True
+        self.write_failures = 0
         
         # Open framebuffer device
         try:
@@ -242,44 +211,55 @@ class FramebufferDisplay:
     
     def write_frame(self, frame):
         """
-        Write frame to framebuffer
+        Write frame to framebuffer (non-blocking, fails gracefully)
         
         Args:
             frame: numpy array (BGR frame from camera)
         """
-        if self.fb_device is None:
+        if self.fb_device is None or not self.write_enabled:
             return
         
-        # Resize frame to match framebuffer resolution
-        if frame.shape[:2] != (self.height, self.width):
-            frame = cv2.resize(frame, (self.width, self.height))
-        
-        # Convert BGR to RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Prepare frame based on framebuffer format
-        if self.bits_per_pixel == 24:
-            # RGB24 format (3 bytes per pixel)
-            frame_output = frame_rgb.astype(np.uint8)
-        elif self.bits_per_pixel == 32:
-            # RGBA32 format (4 bytes per pixel)
-            alpha = np.ones((self.height, self.width, 1), dtype=np.uint8) * 255
-            frame_output = np.concatenate([frame_rgb, alpha], axis=2).astype(np.uint8)
-        else:
-            # Default to RGB24
-            frame_output = frame_rgb.astype(np.uint8)
-        
-        # Ensure we're writing exactly the right amount of data
-        expected_size = self.fb_size
-        actual_size = frame_output.nbytes
-        
-        if actual_size != expected_size:
-            # This shouldn't happen, but handle it gracefully
-            print(f"Warning: Frame size mismatch (expected {expected_size}, got {actual_size})")
+        # If we've had failures, disable writing quickly to keep camera running
+        if self.write_failures > 3:
+            if not hasattr(self, '_disabled_shown'):
+                print("\n⚠ Framebuffer writes disabled after failures")
+                print("   OAKD camera will continue running (reading frames from queue)")
+                print("   Display is disabled - check framebuffer configuration")
+                self._disabled_shown = True
+            self.write_enabled = False
             return
         
-        # Write to framebuffer
         try:
+            # Resize frame to match framebuffer resolution
+            if frame.shape[:2] != (self.height, self.width):
+                frame = cv2.resize(frame, (self.width, self.height))
+            
+            # Convert BGR to RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Prepare frame based on framebuffer format
+            if self.bits_per_pixel == 24:
+                # RGB24 format (3 bytes per pixel)
+                frame_output = frame_rgb.astype(np.uint8)
+            elif self.bits_per_pixel == 32:
+                # RGBA32 format (4 bytes per pixel)
+                alpha = np.ones((self.height, self.width, 1), dtype=np.uint8) * 255
+                frame_output = np.concatenate([frame_rgb, alpha], axis=2).astype(np.uint8)
+            else:
+                # Default to RGB24
+                frame_output = frame_rgb.astype(np.uint8)
+            
+            # Ensure we're writing exactly the right amount of data
+            expected_size = self.fb_size
+            actual_size = frame_output.nbytes
+            
+            if actual_size != expected_size:
+                # Resize if needed
+                if actual_size > expected_size:
+                    frame_output = frame_output[:self.height, :self.width]
+                return
+            
+            # Write to framebuffer (non-blocking)
             self.fb_device.seek(0)
             frame_bytes = frame_output.tobytes()
             
@@ -288,48 +268,40 @@ class FramebufferDisplay:
                 frame_bytes = frame_bytes[:expected_size]
             
             bytes_written = self.fb_device.write(frame_bytes)
-            if bytes_written != expected_size:
-                if bytes_written != len(frame_bytes):
-                    # Only warn if we didn't write all the data we tried to write
-                    if not hasattr(self, '_write_warning_shown'):
-                        print(f"Warning: Only wrote {bytes_written} of {expected_size} bytes to framebuffer")
-                        self._write_warning_shown = True
             self.fb_device.flush()
             
-            # Reset error tracking on successful write
-            if hasattr(self, '_last_error_time'):
-                delattr(self, '_last_error_time')
+            # Reset failure count on successful write
+            if bytes_written == expected_size:
+                self.write_failures = 0
                 
         except OSError as e:
-            # Handle "No space left on device" specifically
+            # Handle framebuffer write errors gracefully
+            self.write_failures += 1
             error_str = str(e)
+            
             if 'No space left on device' in error_str or 'errno 28' in error_str.lower():
-                # This usually means we're writing too much data
-                if not hasattr(self, '_space_error_shown'):
-                    print(f"\n⚠ Framebuffer write error: {e}")
-                    print(f"   Expected size: {expected_size} bytes")
-                    print(f"   Actual size: {len(frame_output.tobytes())} bytes")
-                    print(f"   Trying to fix by using RGB24 format...")
-                    # Try to switch to RGB24
+                # Try switching to RGB24 if we haven't already
+                if self.bits_per_pixel == 32 and self.write_failures == 1:
+                    print(f"\n⚠ Framebuffer write error, trying RGB24 format...")
                     self.bits_per_pixel = 24
                     self.format = 'RGB24'
                     self.fb_size = self.width * self.height * 3
-                    self._space_error_shown = True
-                # Don't write this frame, but continue
-                return
+                # After a few failures, disable to keep camera running
+                if self.write_failures >= 3:
+                    self.write_enabled = False
             else:
-                # Other OSErrors - log occasionally
-                if hasattr(self, '_last_error_time'):
-                    if time.time() - self._last_error_time > 1.0:
-                        print(f"Error writing to framebuffer: {e}")
-                        self._last_error_time = time.time()
+                # Other errors - disable after a few failures
+                if self.write_failures <= 3:
+                    pass  # Silent retry
                 else:
-                    print(f"Error writing to framebuffer: {e}")
-                    self._last_error_time = time.time()
+                    self.write_enabled = False
+                    
         except Exception as e:
-            if not hasattr(self, '_unexpected_error_shown'):
-                print(f"Unexpected error writing to framebuffer: {e}")
-                self._unexpected_error_shown = True
+            self.write_failures += 1
+            if self.write_failures <= 3:
+                pass  # Silent retry
+            else:
+                self.write_enabled = False
     
     def close(self):
         """Close framebuffer device"""
