@@ -39,6 +39,7 @@ class OAKDCamera:
         self.use_mediapipe_fallback = False
         self.mediapipe_pose = None
         self.has_depth = False
+        self.recovery_attempts = 0  # Track device restart attempts
         
         if not DEPTHAI_AVAILABLE:
             print("Error: DepthAI not available. Camera will not work.")
@@ -264,7 +265,11 @@ class OAKDCamera:
         if not self.available or self.rgb_queue is None:
             return None
         
-        in_rgb = self.rgb_queue.tryGet()
+        try:
+            in_rgb = self.rgb_queue.tryGet()
+        except Exception as e:
+            self._handle_stream_error("rgb", e)
+            return None
         if in_rgb is not None:
             frame = in_rgb.getCvFrame()
             return frame
@@ -301,7 +306,11 @@ class OAKDCamera:
             return False, None, annotated_frame
         
         # Get detection results
-        in_nn = self.nn_queue.tryGet()
+        try:
+            in_nn = self.nn_queue.tryGet()
+        except Exception as e:
+            self._handle_stream_error("nn", e)
+            return False, None, annotated_frame
         if in_nn is not None:
             h, w = frame.shape[:2]
             
@@ -446,7 +455,11 @@ class OAKDCamera:
         if not self.has_depth or self.depth_queue is None:
             return None
         
-        in_depth = self.depth_queue.tryGet()
+        try:
+            in_depth = self.depth_queue.tryGet()
+        except Exception as e:
+            self._handle_stream_error("depth", e)
+            return None
         if in_depth is not None:
             depth_frame = in_depth.getFrame()
             return depth_frame
@@ -463,3 +476,29 @@ class OAKDCamera:
         self.nn_queue = None
         self.depth_queue = None
         print("[OAKDCamera] Released")
+
+    def _handle_stream_error(self, stream_name, exc):
+        """
+        Handle stream read errors (e.g., X_LINK_ERROR) by attempting one recovery.
+        """
+        print(f"[OAKDCamera] Warning: Error reading '{stream_name}' stream: {exc}")
+        self.available = False
+        if self.recovery_attempts >= 1:
+            print("[OAKDCamera] Recovery already attempted, skipping further resets.")
+            return
+        self.recovery_attempts += 1
+        print("[OAKDCamera] Attempting to reset device after stream error...")
+        try:
+            self.release()
+        except Exception as release_err:
+            print(f"[OAKDCamera] Error during device release: {release_err}")
+        try:
+            # Reset internal flags before reinitializing
+            self.use_mediapipe_fallback = False
+            self.has_depth = False
+            self.setup_pipeline()
+            self.available = True
+            print("[OAKDCamera] Device reset successful")
+        except Exception as setup_err:
+            print(f"[OAKDCamera] Device reset failed: {setup_err}")
+            self.available = False
