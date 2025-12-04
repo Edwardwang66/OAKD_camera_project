@@ -1,69 +1,68 @@
-# 安装 blobconverter 以启用人员检测和深度支持
+# Install blobconverter to Enable Person Detection and Depth Support
 
-## 问题
+## Problem
 
-如果你看到以下错误：
+If you see the following error:
 ```
 Warning: blobconverter not available. Install with: pip install blobconverter
 Person detection will be disabled.
 [OAKDCamera] Error setting up DepthAI detection: blobconverter required for person detection
 ```
 
-这意味着需要安装 `blobconverter` 来使用 OAKD 相机的边缘 AI 人员检测功能。
+This means you need to install `blobconverter` to use the OAKD camera's edge AI person detection functionality.
 
-## 解决方案
+## Solution
 
-### 安装 blobconverter
+### Install blobconverter
 
-在 Raspberry Pi 上运行：
+On Raspberry Pi, run:
 
 ```bash
 pip install blobconverter
 ```
 
-如果在虚拟环境中：
+If in a virtual environment:
 
 ```bash
-# 激活虚拟环境
-source env/bin/activate  # 或你的虚拟环境路径
+# Activate virtual environment
+source env/bin/activate  # or your virtual environment path
 
-# 安装 blobconverter
+# Install blobconverter
 pip install blobconverter
 ```
 
-### 验证安装
+### Verify Installation
 
 ```bash
 python -c "import blobconverter; print('blobconverter installed successfully')"
 ```
 
-## 安装后
+## After Installation
 
-重新运行 phase3_demo.py，你应该看到：
+Rerun phase3_demo.py, and you should see:
 
 ```
 [OAKDCamera] Camera initialized successfully with DepthAI person detection and depth support
 ```
 
-而不是：
+Instead of:
 
 ```
 [OAKDCamera] Camera initialized with MediaPipe person detection fallback (no depth)
 ```
 
-## 关于深度支持
+## About Depth Support
 
-OAKD Lite 使用双目立体视觉来获取深度图。安装 `blobconverter` 后，深度支持应该会自动启用（如果相机支持 stereo depth）。
+OAKD Lite uses stereo vision to obtain depth maps. After installing `blobconverter`, depth support should be automatically enabled (if the camera supports stereo depth).
 
-如果仍然没有深度支持，可能是因为：
-1. 相机型号不支持 stereo depth（某些型号只有 RGB）
-2. 需要检查相机的实际硬件配置
+If depth support is still not available, it may be because:
+1. The camera model doesn't support stereo depth (some models only have RGB)
+2. Need to check the camera's actual hardware configuration
 
-## 临时解决方案
+## Temporary Solution
 
-如果没有安装 blobconverter，程序会回退到 MediaPipe 人员检测（在 Raspberry Pi CPU 上运行），但会失去：
-- 边缘 AI 性能优势（检测在相机 VPU 上运行）
-- 深度图支持（需要 DepthAI pipeline）
+If blobconverter is not installed, the program will fall back to MediaPipe person detection (running on Raspberry Pi CPU), but will lose:
+- Edge AI performance advantage (detection runs on camera VPU)
+- Depth map support (requires DepthAI pipeline)
 
-程序仍然可以运行，只是性能会稍差。
-
+The program can still run, just with slightly worse performance.

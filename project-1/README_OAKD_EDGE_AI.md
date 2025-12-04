@@ -1,179 +1,178 @@
-# OAKD Edge AI 使用指南
+# OAKD Edge AI Usage Guide
 
-本指南说明如何在OAKD相机内置算力上运行手势识别模型，并使用bounding box进行检测。
+This guide explains how to run gesture recognition models on OAKD camera's built-in processing power and use bounding boxes for detection.
 
-## OAKD相机内置算力
+## OAKD Camera Built-in Processing Power
 
-OAKD Lite相机内置Myriad X VPU，可以在设备端运行深度学习模型，实现：
-- **降低主机计算负担**
-- **提高实时性能**
-- **减少延迟**
+OAKD Lite camera has a built-in Myriad X VPU that can run deep learning models on-device, achieving:
+- **Reduce host computation burden**
+- **Improve real-time performance**
+- **Reduce latency**
 
-## 功能特性
+## Features
 
 1. **Hand Detection with Bounding Box**
-   - 使用MediaPipe检测手部
-   - 返回bounding box坐标 (x, y, w, h)
-   - 在图像上绘制bounding box
+   - Uses MediaPipe to detect hands
+   - Returns bounding box coordinates (x, y, w, h)
+   - Draws bounding box on image
 
-2. **模型推理基于Bounding Box**
-   - 根据bounding box裁剪手部区域
-   - 将裁剪区域输入模型进行分类
-   - 提高识别准确率
+2. **Model Inference Based on Bounding Box**
+   - Crops hand region based on bounding box
+   - Inputs cropped region to model for classification
+   - Improves recognition accuracy
 
-3. **Edge AI支持（可选）**
-   - 将PyTorch模型转换为Blob格式
-   - 在OAKD相机上直接运行推理
-   - 完全利用相机内置算力
+3. **Edge AI Support (Optional)**
+   - Convert PyTorch model to Blob format
+   - Run inference directly on OAKD camera
+   - Fully utilize camera's built-in processing power
 
-## 使用方法
+## Usage
 
-### 1. 基本使用（带Bounding Box）
+### 1. Basic Usage (With Bounding Box)
 
 ```bash
 cd project-1
 python main.py
 ```
 
-程序会自动：
-- 检测手部并绘制bounding box
-- 根据bounding box裁剪手部区域
-- 使用模型对裁剪区域进行分类
+The program will automatically:
+- Detect hand and draw bounding box
+- Crop hand region based on bounding box
+- Use model to classify cropped region
 
-### 2. 转换模型为Blob格式（Edge AI）
+### 2. Convert Model to Blob Format (Edge AI)
 
-#### 步骤1: 安装依赖
+#### Step 1: Install Dependencies
 
 ```bash
 pip install openvino blobconverter
 ```
 
-#### 步骤2: 转换模型
+#### Step 2: Convert Model
 
 ```bash
-# 方法1: 使用转换脚本
+# Method 1: Use conversion script
 python convert_model_to_blob.py --model rps_model_improved.pth
 
-# 方法2: 使用在线转换器
-# 访问: https://blobconverter.luxonis.com/
-# 上传ONNX文件进行转换
+# Method 2: Use online converter
+# Visit: https://blobconverter.luxonis.com/
+# Upload ONNX file for conversion
 ```
 
-#### 步骤3: 使用Edge AI模式
+#### Step 3: Use Edge AI Mode
 
 ```python
 from oakd_edge_ai import OAKDEdgeAICamera
 
-# 初始化Edge AI相机
+# Initialize Edge AI camera
 camera = OAKDEdgeAICamera(
     model_blob_path="rps_model_improved.blob",
     use_hand_detection=True
 )
 
-# 获取带检测结果的帧
+# Get frame with detection results
 frame, bboxes, nn_results = camera.get_frame_with_detection()
 ```
 
-## 代码结构
+## Code Structure
 
-### 主要文件
+### Main Files
 
 1. **`oakd_hand_detector.py`**
    - Hand detection with bounding boxes
-   - 返回 (x, y, w, h) 坐标
+   - Returns (x, y, w, h) coordinates
 
 2. **`oakd_edge_ai.py`**
-   - OAKD Edge AI相机接口
-   - 支持在相机上运行神经网络
+   - OAKD Edge AI camera interface
+   - Supports running neural networks on camera
 
 3. **`convert_model_to_blob.py`**
-   - PyTorch模型转Blob格式工具
-   - 支持ONNX和OpenVINO转换
+   - PyTorch model to Blob format conversion tool
+   - Supports ONNX and OpenVINO conversion
 
 4. **`hand_gesture_detector_model.py`**
-   - 已更新支持bounding box
-   - 根据bbox裁剪区域进行分类
+   - Updated to support bounding box
+   - Classifies based on bbox cropped region
 
-## Bounding Box工作流程
-
-```
-1. 相机捕获帧
-   ↓
-2. Hand Detector检测手部
-   ↓
-3. 返回Bounding Box (x, y, w, h)
-   ↓
-4. 根据BBox裁剪手部区域
-   ↓
-5. 将裁剪区域输入模型
-   ↓
-6. 模型分类 (Rock/Paper/Scissors)
-   ↓
-7. 显示结果和Bounding Box
-```
-
-## Edge AI工作流程
+## Bounding Box Workflow
 
 ```
-1. PyTorch模型 (.pth)
+1. Camera captures frame
    ↓
-2. 转换为ONNX格式
+2. Hand Detector detects hand
    ↓
-3. 转换为OpenVINO IR
+3. Returns Bounding Box (x, y, w, h)
    ↓
-4. 转换为Blob格式 (.blob)
+4. Crop hand region based on BBox
    ↓
-5. 部署到OAKD相机
+5. Input cropped region to model
    ↓
-6. 在Myriad X VPU上运行
+6. Model classification (Rock/Paper/Scissors)
+   ↓
+7. Display result and Bounding Box
 ```
 
-## 模型转换示例
+## Edge AI Workflow
+
+```
+1. PyTorch Model (.pth)
+   ↓
+2. Convert to ONNX format
+   ↓
+3. Convert to OpenVINO IR
+   ↓
+4. Convert to Blob format (.blob)
+   ↓
+5. Deploy to OAKD camera
+   ↓
+6. Run on Myriad X VPU
+```
+
+## Model Conversion Example
 
 ```python
-# 转换PyTorch模型到Blob
+# Convert PyTorch model to Blob
 python convert_model_to_blob.py \
     --model rps_model_improved.pth \
     --output rps_model.blob \
     --input-size 64 64
 ```
 
-## 性能优势
+## Performance Advantages
 
-使用OAKD Edge AI的优势：
+Advantages of using OAKD Edge AI:
 
-- **延迟降低**: 模型在相机上运行，无需传输到主机
-- **CPU释放**: 主机CPU可用于其他任务
-- **实时性**: 更高的帧率和响应速度
-- **功耗优化**: 专用VPU比CPU更高效
+- **Reduced Latency**: Model runs on camera, no need to transfer to host
+- **CPU Offload**: Host CPU available for other tasks
+- **Real-time Performance**: Higher frame rate and response speed
+- **Power Optimization**: Dedicated VPU more efficient than CPU
 
-## 注意事项
+## Notes
 
-1. **模型格式**: 需要将PyTorch模型转换为Blob格式
-2. **输入尺寸**: 确保模型输入尺寸匹配 (默认64x64)
-3. **兼容性**: 某些模型架构可能不支持Edge AI
-4. **Fallback**: 如果Edge AI不可用，会自动回退到CPU推理
+1. **Model Format**: Need to convert PyTorch model to Blob format
+2. **Input Size**: Ensure model input size matches (default 64x64)
+3. **Compatibility**: Some model architectures may not support Edge AI
+4. **Fallback**: If Edge AI unavailable, automatically falls back to CPU inference
 
-## 故障排除
+## Troubleshooting
 
-### Bounding Box未显示
-- 检查手部是否在画面中
-- 确保光线充足
-- 调整MediaPipe检测阈值
+### Bounding Box Not Displayed
+- Check if hand is in frame
+- Ensure adequate lighting
+- Adjust MediaPipe detection threshold
 
-### Edge AI模型加载失败
-- 检查Blob文件路径
-- 验证模型格式是否正确
-- 查看OAKD相机连接状态
+### Edge AI Model Loading Failed
+- Check Blob file path
+- Verify model format is correct
+- Check OAKD camera connection status
 
-### 转换失败
-- 确保安装了OpenVINO
-- 检查模型架构兼容性
-- 尝试使用在线转换器
+### Conversion Failed
+- Ensure OpenVINO is installed
+- Check model architecture compatibility
+- Try using online converter
 
-## 参考资源
+## Reference Resources
 
-- [DepthAI文档](https://docs.luxonis.com/)
+- [DepthAI Documentation](https://docs.luxonis.com/)
 - [Blob Converter](https://blobconverter.luxonis.com/)
-- [OpenVINO工具包](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html)
-
+- [OpenVINO Toolkit](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html)

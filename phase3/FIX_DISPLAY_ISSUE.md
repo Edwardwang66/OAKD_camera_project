@@ -1,18 +1,18 @@
-# 修复 OpenCV Qt/X11 显示问题
+# Fix OpenCV Qt/X11 Display Issues
 
-如果遇到以下错误：
+If you encounter the following error:
 ```
 qt.qpa.xcb: could not connect to display localhost:10.0
 qt.qpa.plugin: Could not load the Qt platform plugin "xcb"
 ```
 
-这是 OpenCV 尝试使用 Qt 后端与 X11 转发不兼容导致的。
+This is caused by OpenCV trying to use the Qt backend which is incompatible with X11 forwarding.
 
-## 快速修复方法
+## Quick Fix Methods
 
-### 方法 1: 使用环境变量（推荐）
+### Method 1: Use Environment Variables (Recommended)
 
-在运行程序前设置环境变量：
+Set environment variables before running the program:
 
 ```bash
 export QT_QPA_PLATFORM=offscreen
@@ -20,19 +20,19 @@ export OPENCV_VIDEOIO_PRIORITY_MSMF=0
 python phase3_demo.py --simulation
 ```
 
-或者一行命令：
+Or one-line command:
 ```bash
 QT_QPA_PLATFORM=offscreen OPENCV_VIDEOIO_PRIORITY_MSMF=0 python phase3_demo.py --simulation
 ```
 
-### 方法 2: 使用修复脚本
+### Method 2: Use Fix Script
 
 ```bash
 chmod +x fix_opencv_display.sh
 ./fix_opencv_display.sh python phase3_demo.py --simulation
 ```
 
-### 方法 3: 添加到 ~/.bashrc（永久解决）
+### Method 3: Add to ~/.bashrc (Permanent Fix)
 
 ```bash
 echo 'export QT_QPA_PLATFORM=offscreen' >> ~/.bashrc
@@ -40,66 +40,65 @@ echo 'export OPENCV_VIDEOIO_PRIORITY_MSMF=0' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### 方法 4: 无GUI模式运行
+### Method 4: Run in No-GUI Mode
 
-如果不需要显示窗口，程序仍然可以正常运行（控制命令会打印到终端）：
+If you don't need a display window, the program can still run normally (control commands will be printed to terminal):
 
 ```bash
-# 程序会自动检测GUI是否可用，如果不可用会继续运行但不显示窗口
+# Program will automatically detect if GUI is available, if not it will continue running without displaying window
 python phase3_demo.py --simulation
 ```
 
-## 检查 X11 转发
+## Check X11 Forwarding
 
-1. **确认 XQuartz 正在运行**（在 Mac 上）
-2. **检查 DISPLAY 变量**：
+1. **Confirm XQuartz is running** (on Mac)
+2. **Check DISPLAY variable**:
    ```bash
    echo $DISPLAY
-   # 应该显示类似：localhost:10.0
+   # Should show something like: localhost:10.0
    ```
-3. **重新连接 SSH**：
+3. **Reconnect SSH**:
    ```bash
-   # 断开当前连接，然后重新连接
+   # Disconnect current connection, then reconnect
    exit
    ssh -Y pi@raspberrypi.local
    ```
 
-## 验证修复
+## Verify Fix
 
-运行测试：
+Run test:
 ```bash
 python -c "import cv2; print('OpenCV version:', cv2.__version__); cv2.namedWindow('test')"
 ```
 
-如果成功，说明修复生效。如果还有错误，错误会被捕获，程序会继续运行。
+If successful, the fix is working. If there are still errors, they will be caught and the program will continue running.
 
-## 注意事项
+## Notes
 
-- 程序会自动捕获 Qt 错误并继续运行
-- 即使显示失败，所有控制逻辑仍然正常工作
-- 控制命令会打印到终端（`[SIM] Car Command: ...`）
-- 可以通过终端输出来监控程序状态
+- Program will automatically catch Qt errors and continue running
+- Even if display fails, all control logic still works normally
+- Control commands will be printed to terminal (`[SIM] Car Command: ...`)
+- You can monitor program status through terminal output
 
-## 如果问题仍然存在
+## If Problem Persists
 
-1. 检查 XQuartz 是否运行：在 Mac 上打开 XQuartz 应用
-2. 重启 XQuartz：完全退出并重新打开
-3. 检查 XQuartz 设置：Preferences > Security > "Allow connections from network clients"
-4. 尝试不同的 SSH 选项：
+1. Check if XQuartz is running: Open XQuartz application on Mac
+2. Restart XQuartz: Completely exit and reopen
+3. Check XQuartz settings: Preferences > Security > "Allow connections from network clients"
+4. Try different SSH options:
    ```bash
-   ssh -X pi@raspberrypi.local  # 不信任模式（可能更兼容）
+   ssh -X pi@raspberrypi.local  # Untrusted mode (may be more compatible)
    ```
 
-## 临时解决方案：忽略显示错误
+## Temporary Solution: Ignore Display Errors
 
-程序已经配置为即使显示失败也会继续运行。你可以：
-- 忽略 Qt 错误消息
-- 通过终端输出监控程序状态
-- 使用 `--simulation` 模式看到所有控制命令
+The program is already configured to continue running even if display fails. You can:
+- Ignore Qt error messages
+- Monitor program status through terminal output
+- Use `--simulation` mode to see all control commands
 
-显示错误不会影响：
-- 相机采集
-- 人员检测
-- 障碍检测
-- 车辆控制命令
-
+Display errors will not affect:
+- Camera capture
+- Person detection
+- Obstacle detection
+- Vehicle control commands

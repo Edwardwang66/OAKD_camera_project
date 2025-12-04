@@ -1,146 +1,145 @@
 # Phase 3: Person Following with Obstacle Avoidance
 
-Phase 3在Phase 2的基础上增加了基于深度图的避障功能，在寻找和接近人的过程中避免撞到障碍物。
+Phase 3 adds depth map-based obstacle avoidance functionality on top of Phase 2, avoiding collisions with obstacles while searching for and approaching people.
 
-**设计用于：Raspberry Pi 5 + OAKD Lite相机 + DonkeyCar/VESC**
+**Designed for: Raspberry Pi 5 + OAKD Lite Camera + DonkeyCar/VESC**
 
-## 概述
+## Overview
 
-Phase 3实现了以下功能：
-- ✅ 基于Phase 2的人体跟踪和接近
-- ✅ 使用深度图进行前方障碍物检测
-- ✅ 在检测到障碍物时自动进入避障模式
-- ✅ 智能选择绕行方向（左转或右转）
+Phase 3 implements the following features:
+- ✅ Person tracking and approach based on Phase 2
+- ✅ Front obstacle detection using depth maps
+- ✅ Automatic obstacle avoidance mode when obstacles are detected
+- ✅ Intelligent direction selection for bypassing (left or right turn)
 
-## 快速开始
+## Quick Start
 
-### 安装依赖
+### Install Dependencies
 
 ```bash
 cd phase3
 pip install -r requirements.txt
 ```
 
-### 运行程序（无GUI模式，推荐）
+### Run Program (No-GUI Mode, Recommended)
 
 ```bash
 python phase3_demo.py --simulation --no-gui
 ```
 
-### 安装 blobconverter（启用深度支持）
+### Install blobconverter (Enable Depth Support)
 
-如果需要深度图支持，安装：
+If depth map support is needed, install:
 
 ```bash
 pip install blobconverter
 ```
 
-详细说明请查看 `INSTALL_BLOBCONVERTER.md`
+For detailed instructions, see `INSTALL_BLOBCONVERTER.md`
 
-## 文件结构
+## File Structure
 
 ```
 phase3/
-├── phase3_demo.py          # 主演示程序
-├── obstacle_detector.py    # 障碍物检测模块
-├── obstacle_avoider.py     # 避障控制模块
-├── README.md               # 本文件
-├── README_PHASE3.md        # 详细文档
-├── QUICK_FIX.md            # 快速修复指南
-├── requirements.txt        # 依赖列表
+├── phase3_demo.py          # Main demo program
+├── obstacle_detector.py    # Obstacle detection module
+├── obstacle_avoider.py     # Obstacle avoidance control module
+├── README.md               # This file
+├── README_PHASE3.md        # Detailed documentation
+├── QUICK_FIX.md            # Quick fix guide
+├── requirements.txt        # Dependencies list
 └── ...
 ```
 
-## 状态机
+## State Machine
 
-Phase 3的状态机包括：
+Phase 3's state machine includes:
 
-1. **SEARCH**: 缓慢旋转寻找人，检测前方障碍物
-2. **APPROACH**: 向人移动，前进前检测障碍物
-3. **AVOID_OBSTACLE**: 避障模式（停止、扫描、转向）
-4. **INTERACT**: 在目标距离处停止
-5. **STOP**: 紧急停止
+1. **SEARCH**: Slowly rotate to find person, detect front obstacles
+2. **APPROACH**: Move towards person, detect obstacles before advancing
+3. **AVOID_OBSTACLE**: Obstacle avoidance mode (stop, scan, turn)
+4. **INTERACT**: Stop at target distance
+5. **STOP**: Emergency stop
 
-## 避障原理
+## Obstacle Avoidance Principle
 
-- **前方检测区域**: 画面中间30%的矩形区域
-- **深度值处理**: 过滤无效值，使用中位数或10%最小值
-- **障碍物判断**: 如果前方深度 < 阈值（默认0.5m），则检测到障碍物
-- **避障策略**: 停止 → 扫描左右深度 → 选择方向 → 转向 → 恢复
+- **Front detection region**: Middle 30% rectangular area of the frame
+- **Depth value processing**: Filter invalid values, use median or 10th percentile minimum
+- **Obstacle judgment**: If front depth < threshold (default 0.5m), obstacle detected
+- **Avoidance strategy**: Stop → Scan left/right depth → Select direction → Turn → Resume
 
-## 使用方法
+## Usage
 
-### 基本运行
+### Basic Run
 
 ```bash
-# 仿真模式（无GUI）
+# Simulation mode (no GUI)
 python phase3_demo.py --simulation --no-gui
 
-# 实际车辆控制
+# Actual vehicle control
 python phase3_demo.py --vesc-port /dev/ttyACM0
 ```
 
-### 命令行参数
+### Command Line Arguments
 
-- `--target-distance`: 目标距离（米，默认: 1.0）
-- `--vesc-port`: VESC串口（例如 /dev/ttyACM0）
-- `--simulation`: 仿真模式（不实际控制车辆）
-- `--depth-threshold`: 障碍物检测阈值（米，默认: 0.5）
-- `--no-gui`: 禁用GUI显示（避免Qt错误）
+- `--target-distance`: Target distance (meters, default: 1.0)
+- `--vesc-port`: VESC serial port (e.g., /dev/ttyACM0)
+- `--simulation`: Simulation mode (does not actually control vehicle)
+- `--depth-threshold`: Obstacle detection threshold (meters, default: 0.5)
+- `--no-gui`: Disable GUI display (avoid Qt errors)
 
-## 依赖模块
+## Dependent Modules
 
-Phase 3依赖于phase2中的共享模块：
-- `oakd_camera.py` - OAKD相机接口（需要深度支持）
-- `car_controller.py` - 车辆控制接口
-- `person_follower.py` - 人员跟踪控制逻辑
+Phase 3 depends on shared modules from phase2:
+- `oakd_camera.py` - OAKD camera interface (requires depth support)
+- `car_controller.py` - Vehicle control interface
+- `person_follower.py` - Person tracking control logic
 
-这些模块位于 `../phase2/` 目录中。
+These modules are located in the `../phase2/` directory.
 
-## 故障排除
+## Troubleshooting
 
-### Qt显示错误
+### Qt Display Errors
 
-如果遇到Qt/X11显示错误，使用 `--no-gui` 选项：
+If you encounter Qt/X11 display errors, use the `--no-gui` option:
 
 ```bash
 python phase3_demo.py --simulation --no-gui
 ```
 
-详细说明请查看 `QUICK_FIX.md` 和 `RUN_WITHOUT_CRASHING.md`
+For detailed instructions, see `QUICK_FIX.md` and `RUN_WITHOUT_CRASHING.md`
 
-### 深度支持不可用
+### Depth Support Unavailable
 
-如果没有深度支持，安装 `blobconverter`：
+If depth support is not available, install `blobconverter`:
 
 ```bash
 pip install blobconverter
 ```
 
-详细说明请查看 `INSTALL_BLOBCONVERTER.md`
+For detailed instructions, see `INSTALL_BLOBCONVERTER.md`
 
-## 详细文档
+## Detailed Documentation
 
-- `README_PHASE3.md` - Phase 3详细文档
-- `QUICK_FIX.md` - 快速修复指南
-- `RUN_WITHOUT_CRASHING.md` - 避免崩溃的说明
-- `INSTALL_BLOBCONVERTER.md` - 安装blobconverter指南
-- `FIX_DISPLAY_ISSUE.md` - 显示问题修复
+- `README_PHASE3.md` - Phase 3 detailed documentation
+- `QUICK_FIX.md` - Quick fix guide
+- `RUN_WITHOUT_CRASHING.md` - Crash prevention guide
+- `INSTALL_BLOBCONVERTER.md` - blobconverter installation guide
+- `FIX_DISPLAY_ISSUE.md` - Display issue fixes
 
-## 与Phase 2的关系
+## Relationship with Phase 2
 
-Phase 3基于Phase 2，添加了：
-- 深度图获取和处理
-- 障碍物检测模块
-- 避障控制逻辑
-- AVOID_OBSTACLE状态
+Phase 3 is based on Phase 2, adding:
+- Depth map acquisition and processing
+- Obstacle detection module
+- Obstacle avoidance control logic
+- AVOID_OBSTACLE state
 
-Phase 2的文件位于 `../phase2/` 目录中，Phase 3会自动从那里导入共享模块。
+Phase 2 files are located in the `../phase2/` directory, and Phase 3 will automatically import shared modules from there.
 
-## 下一步
+## Next Steps
 
-- [ ] 使用深度图计算到人的实际距离（替代bounding box大小）
-- [ ] 改进避障策略（多步避障、路径规划）
-- [ ] 添加LiDAR支持（替换深度图作为障碍检测源）
-- [ ] 动态调整避障参数
-
+- [ ] Use depth map to calculate actual distance to person (replace bounding box size)
+- [ ] Improve obstacle avoidance strategy (multi-step avoidance, path planning)
+- [ ] Add LiDAR support (replace depth map as obstacle detection source)
+- [ ] Dynamically adjust obstacle avoidance parameters

@@ -1,107 +1,106 @@
-# 快速修复指南
+# Quick Fix Guide
 
-## 🚨 立即解决方案（推荐）
+## 🚨 Immediate Solution (Recommended)
 
-**使用 `--no-gui` 选项避免所有显示问题**：
+**Use `--no-gui` option to avoid all display issues**:
 
 ```bash
-cd phase2
+cd phase3
 python phase3_demo.py --simulation --no-gui
 ```
 
-这样程序会：
-- ✅ 正常运行所有功能
-- ✅ 所有输出显示在终端
-- ✅ 控制命令会打印出来（`[SIM] Car Command: ...`）
-- ✅ 不会因为Qt错误崩溃
-- ❌ 不显示 OpenCV 窗口（但所有功能都正常）
+This will:
+- ✅ Run all functionality normally
+- ✅ All output displayed in terminal
+- ✅ Control commands will be printed (`[SIM] Car Command: ...`)
+- ✅ Will not crash due to Qt errors
+- ❌ No OpenCV window display (but all functionality is normal)
 
 ---
 
-## 问题 1: Qt 显示错误导致程序崩溃
+## Problem 1: Qt Display Error Causing Program Crash
 
-如果你看到：
+If you see:
 ```
 qt.qpa.plugin: Could not find the Qt platform plugin "offscreen"
 Aborted
 ```
 
-### 解决方案：禁用 GUI（最简单）
+### Solution: Disable GUI (Simplest)
 
-使用 `--no-gui` 参数运行程序，完全跳过显示：
+Use the `--no-gui` parameter to run the program, completely skipping display:
 
 ```bash
 python phase3_demo.py --simulation --no-gui
 ```
 
-这样程序会：
-- ✅ 正常运行所有功能（人员检测、障碍检测、车辆控制）
-- ✅ 所有输出显示在终端
-- ✅ 控制命令会打印出来（`[SIM] Car Command: ...`）
-- ❌ 不显示 OpenCV 窗口（但所有功能都正常）
+This will:
+- ✅ Run all functionality normally (person detection, obstacle detection, vehicle control)
+- ✅ All output displayed in terminal
+- ✅ Control commands will be printed (`[SIM] Car Command: ...`)
+- ❌ No OpenCV window display (but all functionality is normal)
 
-### 或者使用脚本
+### Or Use Script
 
 ```bash
 chmod +x run_phase3_no_gui.sh
 ./run_phase3_no_gui.sh --simulation
 ```
 
-## 问题 2: 缺少 blobconverter（深度图不可用）
+## Problem 2: Missing blobconverter (Depth Map Unavailable)
 
-如果你看到：
+If you see:
 ```
 Warning: blobconverter not available
 [OAKDCamera] Depth support: DISABLED
 ```
 
-### 解决方案：安装 blobconverter
+### Solution: Install blobconverter
 
 ```bash
 pip install blobconverter
 ```
 
-或者如果在虚拟环境中：
+Or if in a virtual environment:
 ```bash
 source env/bin/activate
 pip install blobconverter
 ```
 
-安装后重新运行程序，你应该看到深度支持已启用。
+After installation, rerun the program and you should see depth support enabled.
 
-## 快速启动命令
+## Quick Start Commands
 
-### 无GUI模式（推荐，避免所有显示问题）
+### No-GUI Mode (Recommended, Avoids All Display Issues)
 
 ```bash
-cd phase2
+cd phase3
 python phase3_demo.py --simulation --no-gui
 ```
 
-### 有GUI模式（如果显示正常工作）
+### With GUI Mode (If Display Works Normally)
 
 ```bash
-cd phase2
+cd phase3
 python phase3_demo.py --simulation
 ```
 
-## 程序输出说明
+## Program Output Description
 
-即使没有GUI，程序仍然会：
+Even without GUI, the program will still:
 
-1. **检测人员** - 终端会显示状态
-2. **检测障碍** - 终端会显示深度信息
-3. **控制车辆** - 控制命令会打印到终端：
+1. **Detect person** - Terminal will show status
+2. **Detect obstacles** - Terminal will show depth information
+3. **Control vehicle** - Control commands will be printed to terminal:
    ```
    [SIM] Car Command: LEFT TURN | Linear: 0.00 m/s, Angular: 0.30 rad/s
    [SIM] Car Command: FORWARD | Linear: 0.50 m/s, Angular: 0.00 rad/s
    ```
 
-4. **状态更新** - 每2秒打印一次状态信息
+4. **Status updates** - Status information printed every 2 seconds
 
-## 查看详细文档
+## View Detailed Documentation
 
-- 安装 blobconverter: `cat INSTALL_BLOBCONVERTER.md`
-- 显示问题修复: `cat FIX_DISPLAY_ISSUE.md`
-- Phase 3 使用说明: `cat README_PHASE3.md`
-
+- Install blobconverter: `cat INSTALL_BLOBCONVERTER.md`
+- Display issue fixes: `cat FIX_DISPLAY_ISSUE.md`
+- Phase 3 usage instructions: `cat README_PHASE3.md`

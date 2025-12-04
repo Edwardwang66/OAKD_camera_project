@@ -1,279 +1,280 @@
 # Phase 3: Person Following with Obstacle Avoidance
 
-Phase 3在Phase 2的基础上增加了基于深度图的避障功能，在寻找和接近人的过程中避免撞到障碍物。
+Phase 3 adds depth map-based obstacle avoidance functionality on top of Phase 2, avoiding collisions with obstacles while searching for and approaching people.
 
-**设计用于：Raspberry Pi 5 + OAKD Lite相机 + DonkeyCar/VESC**
+**Designed for: Raspberry Pi 5 + OAKD Lite Camera + DonkeyCar/VESC**
 
-## 功能概述
+## Feature Overview
 
-Phase 3实现了以下功能：
-- ✅ 基于Phase 2的人体跟踪和接近
-- ✅ 使用深度图进行前方障碍物检测
-- ✅ 在检测到障碍物时自动进入避障模式
-- ✅ 智能选择绕行方向（左转或右转）
+Phase 3 implements the following features:
+- ✅ Person tracking and approach based on Phase 2
+- ✅ Front obstacle detection using depth maps
+- ✅ Automatic obstacle avoidance mode when obstacles are detected
+- ✅ Intelligent direction selection for bypassing (left or right turn)
 
-## 状态机
+## State Machine
 
-Phase 3的状态机在Phase 2的基础上新增了`AVOID_OBSTACLE`状态：
+Phase 3's state machine adds the `AVOID_OBSTACLE` state on top of Phase 2:
 
 1. **SEARCH**: 
-   - 缓慢旋转寻找人
-   - 检测前方障碍物
-   - 检测到障碍物时切换到`AVOID_OBSTACLE`
+   - Slowly rotate to find person
+   - Detect front obstacles
+   - Switch to `AVOID_OBSTACLE` when obstacle detected
 
 2. **APPROACH**:
-   - 向人移动（根据位置进行左转/右转/直行）
-   - **在前进前检测前方障碍物**
-   - 检测到障碍物时切换到`AVOID_OBSTACLE`
-   - 检测到人就绪时切换到`INTERACT`
+   - Move towards person (turn left/right/straight based on position)
+   - **Detect front obstacles before advancing**
+   - Switch to `AVOID_OBSTACLE` when obstacle detected
+   - Switch to `INTERACT` when person is ready
 
-3. **AVOID_OBSTACLE** (新增):
-   - 停止前进
-   - 扫描左右两侧的深度信息
-   - 选择深度更大的一侧转向
-   - 转向一段时间后返回原状态（SEARCH或APPROACH）
+3. **AVOID_OBSTACLE** (New):
+   - Stop advancing
+   - Scan depth information on left and right sides
+   - Choose side with greater depth to turn
+   - Turn for a period then return to original state (SEARCH or APPROACH)
 
 4. **INTERACT**:
-   - 在目标距离处停止
-   - 保持与人交互
+   - Stop at target distance
+   - Maintain interaction with person
 
 5. **STOP**:
-   - 紧急停止
+   - Emergency stop
 
-## 避障原理
+## Obstacle Avoidance Principle
 
-### 深度检测区域
+### Depth Detection Region
 
-- **前方检测区域**: 画面中间30%的矩形区域（可配置）
-- **深度值处理**: 
-  - 过滤掉0值和无效值（< 100mm 或 > 6000mm）
-  - 使用中位数或10%最小值作为代表深度
+- **Front detection region**: Middle 30% rectangular area of the frame (configurable)
+- **Depth value processing**: 
+  - Filter out 0 values and invalid values (< 100mm or > 6000mm)
+  - Use median or 10th percentile minimum as representative depth
 
-### 障碍物判断
+### Obstacle Judgment
 
 ```
-if front_depth < depth_threshold (默认0.5m):
+if front_depth < depth_threshold (default 0.5m):
     obstacle_ahead = True
 else:
     obstacle_ahead = False
 ```
 
-### 避障策略
+### Obstacle Avoidance Strategy
 
-当检测到障碍物时：
-1. **停止**: 先停止0.3秒
-2. **扫描**: 停止0.5秒，扫描左右两侧深度
-3. **转向**: 根据左右深度选择方向，转向1秒
-4. **恢复**: 返回原状态继续任务
+When obstacle is detected:
+1. **Stop**: Stop for 0.3 seconds first
+2. **Scan**: Stop for 0.5 seconds, scan left and right depth
+3. **Turn**: Choose direction based on left/right depth, turn for 1 second
+4. **Resume**: Return to original state to continue task
 
-## 硬件要求
+## Hardware Requirements
 
-- **Raspberry Pi 5** (或 Raspberry Pi 4)
-- **OAKD Lite Camera** (需要支持stereo depth，通过USB连接)
-- **DonkeyCar** with VESC电机控制器
-- **Mac** (用于X11转发显示，通过XQuartz)
+- **Raspberry Pi 5** (or Raspberry Pi 4)
+- **OAKD Lite Camera** (needs stereo depth support, connected via USB)
+- **DonkeyCar** with VESC motor controller
+- **Mac** (for X11 forwarding display via XQuartz)
 
-## 安装
+## Installation
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
-cd phase2
+cd phase3
 pip install -r requirements.txt
 ```
 
-### 2. OAKD相机深度支持
+### 2. OAKD Camera Depth Support
 
-OAKD Lite使用双目立体视觉获取深度图。确保相机正确连接，Phase 3会自动检测深度支持。
+OAKD Lite uses stereo vision to obtain depth maps. Ensure the camera is properly connected, Phase 3 will automatically detect depth support.
 
-**验证深度支持**:
+**Verify depth support**:
 ```bash
-python -c "from oakd_camera import OAKDCamera; cam = OAKDCamera(); print('Depth:', cam.has_depth)"
+python -c "from phase2.oakd_camera import OAKDCamera; cam = OAKDCamera(); print('Depth:', cam.has_depth)"
 ```
 
-## 使用方法
+## Usage
 
-### 基本运行（仿真模式）
+### Basic Run (Simulation Mode)
 
-测试避障功能，不控制实际车辆：
+Test obstacle avoidance functionality without controlling actual vehicle:
 
 ```bash
-cd phase2
+cd phase3
 python phase3_demo.py --simulation
 ```
 
-### 调整避障阈值
+### Adjust Obstacle Avoidance Threshold
 
 ```bash
-# 设置障碍物检测阈值为0.3米
+# Set obstacle detection threshold to 0.3 meters
 python phase3_demo.py --simulation --depth-threshold 0.3
 
-# 设置障碍物检测阈值为0.8米
+# Set obstacle detection threshold to 0.8 meters
 python phase3_demo.py --simulation --depth-threshold 0.8
 ```
 
-### 实际车辆控制
+### Actual Vehicle Control
 
 ```bash
-# 自动检测VESC端口
+# Auto-detect VESC port
 python phase3_demo.py
 
-# 指定VESC端口
+# Specify VESC port
 python phase3_demo.py --vesc-port /dev/ttyACM0
 
-# 调整目标距离
+# Adjust target distance
 python phase3_demo.py --target-distance 1.5 --depth-threshold 0.5
 ```
 
-### 命令行参数
+### Command Line Arguments
 
-- `--target-distance`: 目标距离（米，默认: 1.0）
-- `--vesc-port`: VESC串口（例如 /dev/ttyACM0），None表示自动检测
-- `--simulation`: 仿真模式（不实际控制车辆）
-- `--depth-threshold`: 障碍物检测阈值（米，默认: 0.5）
+- `--target-distance`: Target distance (meters, default: 1.0)
+- `--vesc-port`: VESC serial port (e.g., /dev/ttyACM0), None means auto-detect
+- `--simulation`: Simulation mode (does not actually control vehicle)
+- `--depth-threshold`: Obstacle detection threshold (meters, default: 0.5)
 
-## 文件结构
+## File Structure
 
 ```
+phase3/
+├── phase3_demo.py          # Phase 3 demo (with obstacle avoidance)
+├── obstacle_detector.py    # Obstacle detection module (new)
+├── obstacle_avoider.py     # Obstacle avoidance control module (new)
+└── README_PHASE3.md        # This document
+
 phase2/
-├── oakd_camera.py          # OAKD相机接口（已添加深度支持）
-├── car_controller.py       # 车辆控制接口
-├── person_follower.py      # 人体跟踪控制逻辑
-├── obstacle_detector.py    # 障碍物检测模块（新增）
-├── obstacle_avoider.py     # 避障控制模块（新增）
-├── phase2_demo.py          # Phase 2演示（原始版本）
-├── phase3_demo.py          # Phase 3演示（带避障）
-└── README_PHASE3.md        # 本文档
+├── oakd_camera.py          # OAKD camera interface (depth support added)
+├── car_controller.py       # Vehicle control interface
+├── person_follower.py      # Person tracking control logic
+└── phase2_demo.py          # Phase 2 demo (original version)
 ```
 
-## 配置参数
+## Configuration Parameters
 
-### 障碍物检测器 (`ObstacleDetector`)
+### Obstacle Detector (`ObstacleDetector`)
 
-在`phase3_demo.py`中初始化：
+Initialized in `phase3_demo.py`:
 
 ```python
 self.obstacle_detector = ObstacleDetector(
-    front_region_ratio=0.3,      # 前方检测区域比例（30%）
-    depth_threshold=0.5,          # 障碍物阈值（米）
-    min_depth_mm=100,             # 最小有效深度（毫米）
-    max_depth_mm=6000,            # 最大有效深度（毫米）
-    method='median'               # 'median' 或 'percentile_10'
+    front_region_ratio=0.3,      # Front detection region ratio (30%)
+    depth_threshold=0.5,          # Obstacle threshold (meters)
+    min_depth_mm=100,            # Minimum valid depth (millimeters)
+    max_depth_mm=6000,           # Maximum valid depth (millimeters)
+    method='median'              # 'median' or 'percentile_10'
 )
 ```
 
-### 避障控制器 (`ObstacleAvoider`)
+### Obstacle Avoider (`ObstacleAvoider`)
 
-在`phase3_demo.py`中初始化：
+Initialized in `phase3_demo.py`:
 
 ```python
 self.obstacle_avoider = ObstacleAvoider(
-    turn_duration=1.0,            # 转向持续时间（秒）
-    turn_angular_speed=0.5,       # 转向角速度（rad/s）
-    scan_duration=0.5             # 扫描持续时间（秒）
+    turn_duration=1.0,          # Turn duration (seconds)
+    turn_angular_speed=0.5,      # Turn angular speed (rad/s)
+    scan_duration=0.5            # Scan duration (seconds)
 )
 ```
 
-## 工作原理
+## How It Works
 
-### 深度图获取
+### Depth Map Acquisition
 
-OAKD Lite使用双目立体视觉：
-- 左右两个单目相机（MonoCamera）
-- 立体深度节点（StereoDepth）计算深度图
-- 深度值以毫米为单位（16位）
+OAKD Lite uses stereo vision:
+- Left and right monocular cameras (MonoCamera)
+- Stereo depth node (StereoDepth) calculates depth map
+- Depth values in millimeters (16-bit)
 
-### 障碍物检测流程
+### Obstacle Detection Process
 
-1. **获取深度图**: 从相机获取当前深度帧
-2. **提取前方区域**: 提取画面中间30%区域
-3. **过滤无效值**: 移除0值和超出范围的值
-4. **计算代表深度**: 使用中位数或10%最小值
-5. **判断障碍物**: 比较代表深度与阈值
+1. **Get depth map**: Get current depth frame from camera
+2. **Extract front region**: Extract middle 30% region of frame
+3. **Filter invalid values**: Remove 0 values and out-of-range values
+4. **Calculate representative depth**: Use median or 10th percentile minimum
+5. **Judge obstacle**: Compare representative depth with threshold
 
-### 避障决策流程
+### Obstacle Avoidance Decision Process
 
 ```
-检测到障碍物
+Detect obstacle
     ↓
-进入AVOID_OBSTACLE状态
+Enter AVOID_OBSTACLE state
     ↓
-停止0.3秒
+Stop for 0.3 seconds
     ↓
-扫描左右深度0.5秒
+Scan left/right depth for 0.5 seconds
     ↓
-选择深度更大的一侧
+Choose side with greater depth
     ↓
-转向1秒
+Turn for 1 second
     ↓
-返回原状态（SEARCH或APPROACH）
+Return to original state (SEARCH or APPROACH)
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 深度图不可用
+### Depth Map Unavailable
 
-如果显示"Depth: DISABLED"：
+If it shows "Depth: DISABLED":
 
-1. **检查相机型号**: 确认是OAKD Lite（支持stereo depth）
-2. **检查连接**: 确保相机正确连接
-3. **查看日志**: 查看初始化时的错误信息
+1. **Check camera model**: Confirm it's OAKD Lite (supports stereo depth)
+2. **Check connection**: Ensure camera is properly connected
+3. **Check logs**: Look at error messages during initialization
 
 ```
 [OAKDCamera] Warning: Could not initialize depth cameras: ...
 [OAKDCamera] Depth support disabled (camera may not have stereo)
 ```
 
-### 障碍物检测不准确
+### Obstacle Detection Inaccurate
 
-- **调整阈值**: 尝试不同的`--depth-threshold`值
-- **调整检测区域**: 修改`front_region_ratio`参数
-- **检查光照**: 确保充足光照（双目视觉需要良好光照）
-- **检查深度范围**: 调整`min_depth_mm`和`max_depth_mm`
+- **Adjust threshold**: Try different `--depth-threshold` values
+- **Adjust detection region**: Modify `front_region_ratio` parameter
+- **Check lighting**: Ensure adequate lighting (stereo vision needs good lighting)
+- **Check depth range**: Adjust `min_depth_mm` and `max_depth_mm`
 
-### 避障行为异常
+### Obstacle Avoidance Behavior Abnormal
 
-- **调整转向速度**: 修改`turn_angular_speed`
-- **调整转向时间**: 修改`turn_duration`
-- **检查深度质量**: 查看深度图可视化
+- **Adjust turn speed**: Modify `turn_angular_speed`
+- **Adjust turn time**: Modify `turn_duration`
+- **Check depth quality**: View depth map visualization
 
-## 安全注意事项
+## Safety Notes
 
-⚠️ **重要**：
-- 始终先在仿真模式下测试：`--simulation`
-- 准备紧急停止（按's'键）
-- 在安全、开放的区域测试
-- 从低速开始测试
-- 密切监控车辆行为
-- 确保可以手动停止车辆
+⚠️ **Important**:
+- Always test in simulation mode first: `--simulation`
+- Prepare emergency stop (press 's' key)
+- Test in safe, open area
+- Start testing at low speed
+- Closely monitor vehicle behavior
+- Ensure you can manually stop the vehicle
 
-## 未来改进
+## Future Improvements
 
-- [ ] 使用深度图计算到人的实际距离（替代bounding box大小）
-- [ ] 改进避障策略（多步避障、路径规划）
-- [ ] 添加LiDAR支持（替换深度图作为障碍检测源）
-- [ ] 动态调整避障参数
-- [ ] 记录和回放避障数据
+- [ ] Use depth map to calculate actual distance to person (replace bounding box size)
+- [ ] Improve obstacle avoidance strategy (multi-step avoidance, path planning)
+- [ ] Add LiDAR support (replace depth map as obstacle detection source)
+- [ ] Dynamically adjust obstacle avoidance parameters
+- [ ] Record and replay obstacle avoidance data
 
-## 与LiDAR集成（未来）
+## LiDAR Integration (Future)
 
-当前实现使用深度图进行障碍检测。如果将来要使用LiDAR，只需要替换障碍检测的输入源：
+Current implementation uses depth maps for obstacle detection. If LiDAR is to be used in the future, only need to replace the obstacle detection input source:
 
 ```python
-# 当前：使用深度图
+# Current: Use depth map
 depth_frame = camera.get_depth_frame()
 obstacle_result = obstacle_detector.detect_obstacle(depth_frame)
 
-# 未来：使用LiDAR
+# Future: Use LiDAR
 lidar_data = lidar.get_scan()
 obstacle_result = obstacle_detector.detect_obstacle_from_lidar(lidar_data)
 ```
 
-避障逻辑和状态机保持不变。
+Obstacle avoidance logic and state machine remain unchanged.
 
-## 参考
+## References
 
-- Phase 2 README: `README.md`
-- OAKD Lite深度支持: 参考 `phase1/phase1_oakd_camera.py`
-- DepthAI文档: https://docs.luxonis.com/
-
+- Phase 2 README: `../phase2/README.md`
+- OAKD Lite depth support: Refer to `../phase1/phase1_oakd_camera.py`
+- DepthAI documentation: https://docs.luxonis.com/

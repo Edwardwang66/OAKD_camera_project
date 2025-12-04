@@ -1,140 +1,140 @@
-# OAKD Edge AI + Bounding Box 实现总结
+# OAKD Edge AI + Bounding Box Implementation Summary
 
-## ✅ 已完成的功能
+## ✅ Completed Features
 
-### 1. Bounding Box 检测
-- ✅ **Hand Detection**: 使用 MediaPipe 检测手部
-- ✅ **Bounding Box 返回**: 返回 (x, y, w, h) 坐标
-- ✅ **可视化**: 在图像上绘制 bounding box
-- ✅ **模型输入**: 根据 bounding box 裁剪手部区域进行分类
+### 1. Bounding Box Detection
+- ✅ **Hand Detection**: Uses MediaPipe to detect hands
+- ✅ **Bounding Box Return**: Returns (x, y, w, h) coordinates
+- ✅ **Visualization**: Draws bounding box on image
+- ✅ **Model Input**: Crops hand region based on bounding box for classification
 
-### 2. OAKD Edge AI 支持
-- ✅ **Edge AI 接口**: 创建了 `OAKDEdgeAICamera` 类
-- ✅ **模型转换工具**: `convert_model_to_blob.py` 用于转换模型
-- ✅ **Blob 格式支持**: 支持在 OAKD 相机上运行模型
+### 2. OAKD Edge AI Support
+- ✅ **Edge AI Interface**: Created `OAKDEdgeAICamera` class
+- ✅ **Model Conversion Tool**: `convert_model_to_blob.py` for model conversion
+- ✅ **Blob Format Support**: Supports running models on OAKD camera
 
-### 3. 代码更新
-- ✅ **hand_gesture_detector_model.py**: 已更新支持 bounding box
-- ✅ **main.py**: 集成 bounding box 检测和显示
-- ✅ **oakd_hand_detector.py**: 专门的手部检测器，返回 bounding box
+### 3. Code Updates
+- ✅ **hand_gesture_detector_model.py**: Updated to support bounding box
+- ✅ **main.py**: Integrated bounding box detection and display
+- ✅ **oakd_hand_detector.py**: Dedicated hand detector that returns bounding box
 
-## 📁 新增文件
+## 📁 New Files
 
 1. **`oakd_edge_ai.py`**
-   - OAKD Edge AI 相机接口
-   - 支持在相机内置 VPU 上运行模型
+   - OAKD Edge AI camera interface
+   - Supports running models on camera's built-in VPU
 
 2. **`oakd_hand_detector.py`**
-   - 手部检测器，返回 bounding box
-   - 支持裁剪手部区域
+   - Hand detector that returns bounding box
+   - Supports cropping hand regions
 
 3. **`convert_model_to_blob.py`**
-   - PyTorch 模型转 Blob 格式工具
-   - 支持 ONNX 和 OpenVINO 转换
+   - PyTorch model to Blob format conversion tool
+   - Supports ONNX and OpenVINO conversion
 
 4. **`README_OAKD_EDGE_AI.md`**
-   - Edge AI 使用指南（中文）
+   - Edge AI usage guide
 
 5. **`USAGE_BBOX.md`**
-   - Bounding Box 使用说明（中文）
+   - Bounding Box usage instructions
 
-## 🔄 工作流程
+## 🔄 Workflow
 
-### 当前实现（CPU推理 + Bounding Box）
-
-```
-相机帧 (640x480)
-  ↓
-MediaPipe 手部检测
-  ↓
-获取 Bounding Box (x, y, w, h)
-  ↓
-根据 BBox 裁剪手部区域
-  ↓
-调整大小到 64x64
-  ↓
-PyTorch 模型分类 (CPU)
-  ↓
-返回结果和 Bounding Box
-```
-
-### Edge AI 实现（OAKD VPU推理）
+### Current Implementation (CPU Inference + Bounding Box)
 
 ```
-相机帧 (OAKD)
+Camera Frame (640x480)
   ↓
-Hand Detection Model (OAKD VPU) - 可选
+MediaPipe Hand Detection
   ↓
-获取 Bounding Box
+Get Bounding Box (x, y, w, h)
   ↓
-裁剪手部区域
+Crop Hand Region Based on BBox
+  ↓
+Resize to 64x64
+  ↓
+PyTorch Model Classification (CPU)
+  ↓
+Return Result and Bounding Box
+```
+
+### Edge AI Implementation (OAKD VPU Inference)
+
+```
+Camera Frame (OAKD)
+  ↓
+Hand Detection Model (OAKD VPU) - Optional
+  ↓
+Get Bounding Box
+  ↓
+Crop Hand Region
   ↓
 Gesture Classification Model (OAKD VPU)
   ↓
-返回结果（无需传输到主机）
+Return Result (No need to transfer to host)
 ```
 
-## 🚀 使用方法
+## 🚀 Usage
 
-### 基本使用（带 Bounding Box）
+### Basic Usage (With Bounding Box)
 
 ```bash
 cd project-1
 python main.py
 ```
 
-程序会自动：
-1. 检测手部并显示 bounding box（绿色框）
-2. 根据 bounding box 裁剪区域
-3. 使用模型对裁剪区域进行分类
-4. 显示识别结果
+The program will automatically:
+1. Detect hand and display bounding box (green box)
+2. Crop region based on bounding box
+3. Use model to classify cropped region
+4. Display recognition result
 
-### Edge AI 使用（需要转换模型）
+### Edge AI Usage (Requires Model Conversion)
 
 ```bash
-# 1. 转换模型
+# 1. Convert model
 python convert_model_to_blob.py --model rps_model_improved.pth
 
-# 2. 使用 Edge AI 模式（需要修改代码使用 OAKDEdgeAICamera）
+# 2. Use Edge AI mode (requires code modification to use OAKDEdgeAICamera)
 ```
 
-## 📊 Bounding Box 格式
+## 📊 Bounding Box Format
 
-返回格式：`(x, y, width, height)`
+Return format: `(x, y, width, height)`
 
-- **x, y**: 左上角坐标
-- **width, height**: 边界框尺寸
-- **包含 padding**: 默认 20-30 像素，确保完整手部区域
+- **x, y**: Top-left corner coordinates
+- **width, height**: Bounding box dimensions
+- **Includes padding**: Default 20-30 pixels to ensure complete hand region
 
-## 🎯 优势
+## 🎯 Advantages
 
-### Bounding Box 的优势
-1. ✅ **提高准确率**: 只对相关区域分类
-2. ✅ **减少干扰**: 排除背景
-3. ✅ **性能优化**: 处理更小区域
-4. ✅ **可视化**: 清楚显示检测区域
+### Bounding Box Advantages
+1. ✅ **Improved Accuracy**: Only classify relevant regions
+2. ✅ **Reduced Interference**: Exclude background
+3. ✅ **Performance Optimization**: Process smaller regions
+4. ✅ **Visualization**: Clearly display detection region
 
-### Edge AI 的优势
-1. ✅ **低延迟**: 模型在相机上运行
-2. ✅ **释放CPU**: 主机CPU用于其他任务
-3. ✅ **实时性**: 更高帧率
-4. ✅ **功耗优化**: VPU比CPU更高效
+### Edge AI Advantages
+1. ✅ **Low Latency**: Model runs on camera
+2. ✅ **CPU Offload**: Host CPU available for other tasks
+3. ✅ **Real-time Performance**: Higher frame rate
+4. ✅ **Power Optimization**: VPU more efficient than CPU
 
-## 📝 下一步（可选）
+## 📝 Next Steps (Optional)
 
-如果要完全使用 OAKD Edge AI：
+If you want to fully use OAKD Edge AI:
 
-1. **转换模型为 Blob**
+1. **Convert Model to Blob**
    ```bash
    python convert_model_to_blob.py --model rps_model_improved.pth
    ```
 
-2. **使用在线转换器**
-   - 访问: https://blobconverter.luxonis.com/
-   - 上传 ONNX 文件
-   - 下载 .blob 文件
+2. **Use Online Converter**
+   - Visit: https://blobconverter.luxonis.com/
+   - Upload ONNX file
+   - Download .blob file
 
-3. **修改代码使用 Edge AI**
+3. **Modify Code to Use Edge AI**
    ```python
    from oakd_edge_ai import OAKDEdgeAICamera
    
@@ -144,16 +144,15 @@ python convert_model_to_blob.py --model rps_model_improved.pth
    )
    ```
 
-## ⚠️ 注意事项
+## ⚠️ Notes
 
-1. **模型转换**: Blob 格式需要特定的模型架构支持
-2. **输入尺寸**: 确保模型输入尺寸匹配（默认 64x64）
-3. **Fallback**: 如果 Edge AI 不可用，自动回退到 CPU 推理
-4. **兼容性**: 某些复杂模型可能不支持 Edge AI
+1. **Model Conversion**: Blob format requires specific model architecture support
+2. **Input Size**: Ensure model input size matches (default 64x64)
+3. **Fallback**: If Edge AI unavailable, automatically falls back to CPU inference
+4. **Compatibility**: Some complex models may not support Edge AI
 
-## 📚 文档
+## 📚 Documentation
 
-- **README_OAKD_EDGE_AI.md**: Edge AI 详细指南
-- **USAGE_BBOX.md**: Bounding Box 使用说明
-- **README.md**: 项目主文档
-
+- **README_OAKD_EDGE_AI.md**: Edge AI detailed guide
+- **USAGE_BBOX.md**: Bounding Box usage instructions
+- **README.md**: Project main documentation

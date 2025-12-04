@@ -1,44 +1,44 @@
-# Bounding Box 使用说明
+# Bounding Box Usage Instructions
 
-## 功能概述
+## Feature Overview
 
-Project-1 现在支持使用 bounding box 进行手势识别：
+Project-1 now supports gesture recognition using bounding boxes:
 
-1. **Hand Detection**: 使用 MediaPipe 检测手部位置
-2. **Bounding Box**: 返回手部的边界框坐标 (x, y, w, h)
-3. **模型推理**: 根据 bounding box 裁剪手部区域，输入模型进行分类
+1. **Hand Detection**: Uses MediaPipe to detect hand position
+2. **Bounding Box**: Returns hand bounding box coordinates (x, y, w, h)
+3. **Model Inference**: Crops hand region based on bounding box, inputs to model for classification
 
-## 工作流程
+## Workflow
 
 ```
-相机帧
+Camera Frame
   ↓
-MediaPipe 手部检测
+MediaPipe Hand Detection
   ↓
-获取 Bounding Box (x, y, w, h)
+Get Bounding Box (x, y, w, h)
   ↓
-根据 BBox 裁剪手部区域
+Crop Hand Region Based on BBox
   ↓
-调整大小到模型输入尺寸 (64x64)
+Resize to Model Input Size (64x64)
   ↓
-模型分类 (Rock/Paper/Scissors)
+Model Classification (Rock/Paper/Scissors)
   ↓
-显示结果和 Bounding Box
+Display Result and Bounding Box
 ```
 
-## 代码示例
+## Code Examples
 
-### 基本使用
+### Basic Usage
 
 ```python
 from oakd_hand_detector import OAKDHandDetector
 from hand_gesture_detector_model import HandGestureDetectorModel
 
-# 初始化检测器
+# Initialize detectors
 hand_detector = OAKDHandDetector()
 gesture_detector = HandGestureDetectorModel()
 
-# 检测手部和手势
+# Detect hand and gesture
 frame = camera.get_frame()
 bbox, landmarks, annotated = hand_detector.detect_hand_bbox(frame)
 
@@ -46,59 +46,58 @@ if bbox:
     x, y, w, h = bbox
     print(f"Hand detected at: ({x}, {y}), size: {w}x{h}")
     
-    # 模型会自动使用 bbox 进行识别
+    # Model will automatically use bbox for recognition
     gesture, result_frame, _ = gesture_detector.detect_gesture(frame)
     print(f"Gesture: {gesture.value}")
 ```
 
-### 手动裁剪区域
+### Manual Region Cropping
 
 ```python
-# 获取 bounding box
+# Get bounding box
 bbox, _, _ = hand_detector.detect_hand_bbox(frame)
 
 if bbox:
-    # 裁剪手部区域
+    # Crop hand region
     hand_region = hand_detector.crop_hand_region(frame, bbox)
     
-    # 可以保存或进一步处理
+    # Can save or further process
     cv2.imwrite("hand_region.jpg", hand_region)
 ```
 
-## Bounding Box 格式
+## Bounding Box Format
 
-Bounding box 返回格式：`(x, y, width, height)`
+Bounding box return format: `(x, y, width, height)`
 
-- `x`: 左上角 X 坐标
-- `y`: 左上角 Y 坐标  
-- `width`: 边界框宽度
-- `height`: 边界框高度
+- `x`: Top-left X coordinate
+- `y`: Top-left Y coordinate  
+- `width`: Bounding box width
+- `height`: Bounding box height
 
-包含 padding（默认 20-30 像素）以确保完整的手部区域。
+Includes padding (default 20-30 pixels) to ensure complete hand region.
 
-## 可视化
+## Visualization
 
-Bounding box 会自动绘制在图像上：
-- **绿色框**: MediaPipe 手部检测的 bounding box
-- **蓝色框**: 模型输入区域（如果有）
-- **手部关键点**: MediaPipe landmarks
+Bounding box is automatically drawn on the image:
+- **Green box**: MediaPipe hand detection bounding box
+- **Blue box**: Model input region (if any)
+- **Hand keypoints**: MediaPipe landmarks
 
-## 优势
+## Advantages
 
-使用 bounding box 的优势：
+Advantages of using bounding box:
 
-1. **提高准确率**: 只对相关区域进行分类
-2. **减少干扰**: 排除背景和其他物体
-3. **性能优化**: 处理更小的图像区域
-4. **可视化**: 清楚显示检测区域
+1. **Improved Accuracy**: Only classify relevant regions
+2. **Reduced Interference**: Exclude background and other objects
+3. **Performance Optimization**: Process smaller image regions
+4. **Visualization**: Clearly display detection region
 
-## 在 OAKD Edge AI 上使用
+## Using on OAKD Edge AI
 
-如果要使用 OAKD 内置算力：
+If you want to use OAKD's built-in processing power:
 
-1. 转换模型为 Blob 格式
-2. 使用 `OAKDEdgeAICamera` 类
-3. Bounding box 检测可以在相机上运行（需要手部检测模型）
+1. Convert model to Blob format
+2. Use `OAKDEdgeAICamera` class
+3. Bounding box detection can run on camera (requires hand detection model)
 
-详见 `README_OAKD_EDGE_AI.md`
-
+See `README_OAKD_EDGE_AI.md` for details
