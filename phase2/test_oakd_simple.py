@@ -49,6 +49,12 @@ def main():
     print("OAKD Camera Simple Test")
     print("=" * 60)
     print("\nPress 'q' to quit\n")
+
+    # Detect headless mode (no DISPLAY/X11). Avoid Qt/OpenCV GUI calls to prevent crashes.
+    headless = os.environ.get("DISPLAY") is None
+    if headless:
+        print("[INFO] DISPLAY not set. Running headless (no cv2.imshow).")
+        print("       Use ssh -Y/-X with XQuartz if you want the live video window.")
     
     try:
         # Set up pipeline
@@ -83,11 +89,16 @@ def main():
                 cv2.putText(frame, "Press 'q' to quit", (10, 70),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 
-                # Display frame
-                cv2.imshow("OAKD Camera", frame)
+                # Display frame if GUI is available
+                if not headless:
+                    try:
+                        cv2.imshow("OAKD Camera", frame)
+                    except Exception as e:
+                        print(f"[INFO] Disabling GUI (imshow failed): {e}")
+                        headless = True
             
             # Check for quit
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(1) & 0xFF if not headless else -1
             if key == ord('q'):
                 print("\nQuitting...")
                 break
@@ -116,7 +127,11 @@ def main():
     
     finally:
         # Cleanup
-        cv2.destroyAllWindows()
+        if not headless:
+            try:
+                cv2.destroyAllWindows()
+            except:
+                pass
         if 'device' in locals():
             del device
         print("Cleanup complete!")
@@ -124,4 +139,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
