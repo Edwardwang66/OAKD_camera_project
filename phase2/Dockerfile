@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libgomp1 \
     libusb-1.0-0 \
-    libgl1-mesa-glx \
+    libgl1 \
     udev \
     && rm -rf /var/lib/apt/lists/*
 
