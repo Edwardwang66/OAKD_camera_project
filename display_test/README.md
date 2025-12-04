@@ -13,22 +13,39 @@
 
 ## 快速开始
 
+### ⚠️ 第一步：设置脚本权限（在 Raspberry Pi 上运行）
+
+在 Raspberry Pi 上首先设置脚本权限：
+
+```bash
+cd ~/projects/OAKD_camera_project/display_test
+chmod +x *.sh *.py
+```
+
+或者逐个设置：
+
+```bash
+chmod +x run_oakd_hdmi.sh start_emoji.sh run_emoji.sh setup_framebuffer.sh
+chmod +x test_display.py emoji_simple.py oakd_to_hdmi.py
+```
+
 ### 对于 Raspberry Pi 本地显示器（Framebuffer）
 
 如果你有直接连接到 Raspberry Pi 的显示器（如 7 寸触摸屏），使用 framebuffer 版本：
 
 ```bash
-# 1. 设置环境（可选，但推荐）
-source setup_framebuffer.sh
+# 1. 显示 OAKD 相机画面
+unset DISPLAY && unset QT_QPA_PLATFORM && python3 oakd_to_hdmi.py
 
-# 2. 显示 emoji
-python emoji_display_framebuffer.py --emoji smile
+# 2. 或者显示 emoji
+unset DISPLAY && unset QT_QPA_PLATFORM && python3 emoji_simple.py --emoji smile
 ```
 
-或者直接运行（会自动检测分辨率）：
+或者使用启动脚本：
 
 ```bash
-python emoji_display_framebuffer.py --emoji heart
+./run_oakd_hdmi.sh
+./start_emoji.sh --emoji 😊
 ```
 
 ### 1. 检查显示

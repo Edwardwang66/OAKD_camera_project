@@ -10,6 +10,16 @@ Aborted
 
 ## ✅ 解决方案
 
+### 第一步：设置脚本权限（在 Raspberry Pi 上运行）
+
+```bash
+cd ~/projects/OAKD_camera_project/display_test
+chmod +x run_oakd_hdmi.sh start_emoji.sh run_emoji.sh setup_framebuffer.sh
+chmod +x test_display.py emoji_simple.py oakd_to_hdmi.py
+```
+
+### 第二步：运行程序
+
 **关键：必须在运行 Python 之前从 shell 中 unset DISPLAY！**
 
 ### 正确的方法（在 shell 中 unset）：
