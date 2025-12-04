@@ -11,13 +11,17 @@ from datetime import datetime
 
 
 class UserRegistration:
-    def __init__(self, data_dir="user_data"):
+    def __init__(self, data_dir=None):
         """
         Initialize user registration system
         
         Args:
-            data_dir: Directory to store user data
+            data_dir: Directory to store user data (default: user_data in module directory)
         """
+        if data_dir is None:
+            # Use user_data directory relative to this module
+            module_dir = os.path.dirname(os.path.abspath(__file__))
+            data_dir = os.path.join(module_dir, "user_data")
         self.data_dir = data_dir
         self.users_file = os.path.join(data_dir, "users.json")
         self.faces_file = os.path.join(data_dir, "faces_encodings.pkl")

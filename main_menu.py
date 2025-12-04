@@ -14,9 +14,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'project-3'))
 
 # Import camera from root directory
 from camera import Camera
-from user_registration import UserRegistration
+from human_detection.user_registration import UserRegistration
 from game_menu import GameMenu, GameChoice
-from registration_ui import RegistrationUI
+from human_detection.registration_ui import RegistrationUI
 from utils import is_gui_available, safe_imshow, safe_waitkey, print_gui_warning
 
 
