@@ -27,11 +27,45 @@ import cv2
 from oakd_camera import OAKDCamera
 
 
-def get_framebuffer_resolution():
+def find_framebuffer_device():
+    """
+    Find available framebuffer devices and return the best one for HDMI
+    
+    Returns:
+        str: Path to framebuffer device (e.g., '/dev/fb0')
+    """
+    import subprocess
+    import glob
+    
+    # List all framebuffer devices
+    fb_devices = sorted(glob.glob('/dev/fb*'))
+    
+    if not fb_devices:
+        return None
+    
+    # Try to find the active one by checking fbset
+    for fb_device in fb_devices:
+        try:
+            # Try to get info about this framebuffer
+            result = subprocess.run(['fbset', '-i', '-fb', fb_device], 
+                                  capture_output=True, text=True, timeout=1)
+            if result.returncode == 0:
+                # Check if it has a valid resolution
+                for line in result.stdout.split('\n'):
+                    if 'geometry' in line.lower():
+                        return fb_device
+        except:
+            continue
+    
+    # Fallback to first available device
+    return fb_devices[0]
+
+
+def get_framebuffer_resolution(fb_device='/dev/fb0'):
     """Get resolution from framebuffer"""
     try:
         import subprocess
-        result = subprocess.run(['fbset', '-s'], 
+        result = subprocess.run(['fbset', '-s', '-fb', fb_device], 
                               capture_output=True, text=True, timeout=1)
         if result.returncode == 0:
             for line in result.stdout.split('\n'):
@@ -44,26 +78,81 @@ def get_framebuffer_resolution():
     return 1024, 600  # Default
 
 
+def check_framebuffer_permissions(fb_device):
+    """
+    Check if we have permission to access framebuffer device
+    Returns True if accessible, False otherwise
+    """
+    try:
+        # Try to open the device
+        test_file = open(fb_device, 'wb')
+        test_file.close()
+        return True
+    except PermissionError:
+        return False
+    except Exception:
+        return False
+
+
+def setup_framebuffer_permissions(fb_device):
+    """
+    Attempt to set permissions on framebuffer device
+    Returns True if successful, False otherwise
+    """
+    import subprocess
+    
+    try:
+        # Try to set permissions (requires sudo)
+        result = subprocess.run(['sudo', 'chmod', '666', fb_device],
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            return True
+    except:
+        pass
+    
+    return False
+
+
 class FramebufferDisplay:
     """Direct framebuffer display for Raspberry Pi HDMI"""
-    def __init__(self, width=1024, height=600):
+    def __init__(self, width=1024, height=600, fb_device=None):
         self.width = width
         self.height = height
         self.fb_device = None
+        self.fb_path = fb_device
+        
+        # Find framebuffer device if not specified
+        if self.fb_path is None:
+            print("Detecting framebuffer device...")
+            self.fb_path = find_framebuffer_device()
+            if self.fb_path is None:
+                raise RuntimeError("No framebuffer device found. Make sure HDMI is connected.")
+            print(f"Found framebuffer device: {self.fb_path}")
+        
+        # Check permissions
+        if not check_framebuffer_permissions(self.fb_path):
+            print(f"\n⚠ Permission denied for {self.fb_path}")
+            print("Attempting to set permissions...")
+            if setup_framebuffer_permissions(self.fb_path):
+                print("✓ Permissions set successfully")
+            else:
+                print(f"\n❌ Could not set permissions automatically.")
+                print(f"Please run manually: sudo chmod 666 {self.fb_path}")
+                raise PermissionError(f"Cannot access {self.fb_path}. Run: sudo chmod 666 {self.fb_path}")
         
         # Get actual resolution from framebuffer
-        width, height = get_framebuffer_resolution()
+        width, height = get_framebuffer_resolution(self.fb_path)
         self.width = width
         self.height = height
         self.fb_size = width * height * 4  # RGBA32
         
         # Open framebuffer device
         try:
-            self.fb_device = open('/dev/fb0', 'wb')
-            print(f"✓ Opened framebuffer: /dev/fb0 ({width}x{height})")
+            self.fb_device = open(self.fb_path, 'wb')
+            print(f"✓ Opened framebuffer: {self.fb_path} ({width}x{height})")
         except Exception as e:
-            print(f"ERROR: Could not open framebuffer /dev/fb0: {e}")
-            print("Make sure you have permission: sudo chmod 666 /dev/fb0")
+            print(f"ERROR: Could not open framebuffer {self.fb_path}: {e}")
+            print(f"Make sure you have permission: sudo chmod 666 {self.fb_path}")
             raise
     
     def write_frame(self, frame):
@@ -104,13 +193,38 @@ class FramebufferDisplay:
 
 def main():
     """Main function"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Display OAKD camera on HDMI via framebuffer')
+    parser.add_argument('--fb', type=str, default=None,
+                       help='Framebuffer device path (e.g., /dev/fb0). Auto-detect if not specified.')
+    args = parser.parse_args()
+    
     print("=" * 60)
     print("OAKD Camera to HDMI Display")
     print("=" * 60)
     
+    # Find framebuffer device
+    if args.fb:
+        fb_device = args.fb
+        print(f"\nUsing specified framebuffer: {fb_device}")
+    else:
+        print("\nDetecting framebuffer device...")
+        fb_device = find_framebuffer_device()
+        if fb_device is None:
+            print("ERROR: No framebuffer device found!")
+            print("Available devices:")
+            import glob
+            for dev in glob.glob('/dev/fb*'):
+                print(f"  - {dev}")
+            print("\nMake sure HDMI is connected and try:")
+            print("  python3 oakd_to_hdmi.py --fb /dev/fb0")
+            sys.exit(1)
+        print(f"Using framebuffer: {fb_device}")
+    
     # Get display resolution
-    width, height = get_framebuffer_resolution()
-    print(f"\nDisplay Resolution: {width}x{height}")
+    width, height = get_framebuffer_resolution(fb_device)
+    print(f"Display Resolution: {width}x{height}")
     
     # Initialize OAKD camera
     print("\n[1/2] Initializing OAKD camera...")
@@ -129,10 +243,15 @@ def main():
     # Initialize framebuffer display
     print("\n[2/2] Setting up framebuffer display...")
     try:
-        display = FramebufferDisplay(width, height)
+        display = FramebufferDisplay(width, height, fb_device=fb_device)
         print("✓ Framebuffer display ready")
+    except PermissionError as e:
+        print(f"\nERROR: {e}")
+        sys.exit(1)
     except Exception as e:
         print(f"ERROR: Could not initialize framebuffer: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
     
     print("\n" + "=" * 60)
