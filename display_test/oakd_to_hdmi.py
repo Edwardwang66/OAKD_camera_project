@@ -61,21 +61,55 @@ def find_framebuffer_device():
     return fb_devices[0]
 
 
-def get_framebuffer_resolution(fb_device='/dev/fb0'):
-    """Get resolution from framebuffer"""
+def get_framebuffer_info(fb_device='/dev/fb0'):
+    """
+    Get framebuffer resolution and format information
+    
+    Returns:
+        tuple: (width, height, bits_per_pixel, format)
+    """
     try:
         import subprocess
-        result = subprocess.run(['fbset', '-s', '-fb', fb_device], 
+        result = subprocess.run(['fbset', '-i', '-fb', fb_device], 
                               capture_output=True, text=True, timeout=1)
         if result.returncode == 0:
+            width, height = 1024, 600
+            bits_per_pixel = 32
+            format_str = 'RGBA32'
+            
             for line in result.stdout.split('\n'):
-                if 'geometry' in line.lower():
+                line_lower = line.lower()
+                if 'geometry' in line_lower:
                     parts = line.split()
                     if len(parts) >= 3:
-                        return int(parts[1]), int(parts[2])
+                        width = int(parts[1])
+                        height = int(parts[2])
+                elif 'bits_per_pixel' in line_lower or 'bpp' in line_lower:
+                    parts = line.split()
+                    for i, part in enumerate(parts):
+                        if 'bits' in part.lower() or 'bpp' in part.lower():
+                            if i + 1 < len(parts):
+                                try:
+                                    bits_per_pixel = int(parts[i + 1])
+                                except:
+                                    pass
+            
+            # Determine format based on bits per pixel
+            if bits_per_pixel == 24:
+                format_str = 'RGB24'
+            elif bits_per_pixel == 32:
+                format_str = 'RGBA32'
+            
+            return width, height, bits_per_pixel, format_str
     except:
         pass
-    return 1024, 600  # Default
+    return 1024, 600, 24, 'RGB24'  # Default to RGB24
+
+
+def get_framebuffer_resolution(fb_device='/dev/fb0'):
+    """Get resolution from framebuffer (backward compatibility)"""
+    width, height, _, _ = get_framebuffer_info(fb_device)
+    return width, height
 
 
 def check_framebuffer_permissions(fb_device):
@@ -120,6 +154,8 @@ class FramebufferDisplay:
         self.height = height
         self.fb_device = None
         self.fb_path = fb_device
+        self.bits_per_pixel = 24
+        self.format = 'RGB24'
         
         # Find framebuffer device if not specified
         if self.fb_path is None:
@@ -140,16 +176,28 @@ class FramebufferDisplay:
                 print(f"Please run manually: sudo chmod 666 {self.fb_path}")
                 raise PermissionError(f"Cannot access {self.fb_path}. Run: sudo chmod 666 {self.fb_path}")
         
-        # Get actual resolution from framebuffer
-        width, height = get_framebuffer_resolution(self.fb_path)
+        # Get actual resolution and format from framebuffer
+        width, height, bits_per_pixel, format_str = get_framebuffer_info(self.fb_path)
         self.width = width
         self.height = height
-        self.fb_size = width * height * 4  # RGBA32
+        self.bits_per_pixel = bits_per_pixel
+        self.format = format_str
+        
+        # Calculate buffer size based on format
+        if bits_per_pixel == 24:
+            self.fb_size = width * height * 3  # RGB24
+        elif bits_per_pixel == 32:
+            self.fb_size = width * height * 4  # RGBA32
+        else:
+            # Default to RGB24
+            self.fb_size = width * height * 3
+            self.bits_per_pixel = 24
+            self.format = 'RGB24'
         
         # Open framebuffer device
         try:
             self.fb_device = open(self.fb_path, 'wb')
-            print(f"✓ Opened framebuffer: {self.fb_path} ({width}x{height})")
+            print(f"✓ Opened framebuffer: {self.fb_path} ({width}x{height}, {format_str})")
         except Exception as e:
             print(f"ERROR: Could not open framebuffer {self.fb_path}: {e}")
             print(f"Make sure you have permission: sudo chmod 666 {self.fb_path}")
@@ -162,6 +210,9 @@ class FramebufferDisplay:
         Args:
             frame: numpy array (BGR frame from camera)
         """
+        if self.fb_device is None:
+            return
+        
         # Resize frame to match framebuffer resolution
         if frame.shape[:2] != (self.height, self.width):
             frame = cv2.resize(frame, (self.width, self.height))
@@ -169,20 +220,45 @@ class FramebufferDisplay:
         # Convert BGR to RGB
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        # Convert to RGBA (framebuffer expects RGBA32)
-        alpha = np.ones((self.height, self.width, 1), dtype=np.uint8) * 255
-        frame_rgba = np.concatenate([frame_rgb, alpha], axis=2)
+        # Prepare frame based on framebuffer format
+        if self.bits_per_pixel == 24:
+            # RGB24 format (3 bytes per pixel)
+            frame_output = frame_rgb.astype(np.uint8)
+        elif self.bits_per_pixel == 32:
+            # RGBA32 format (4 bytes per pixel)
+            alpha = np.ones((self.height, self.width, 1), dtype=np.uint8) * 255
+            frame_output = np.concatenate([frame_rgb, alpha], axis=2).astype(np.uint8)
+        else:
+            # Default to RGB24
+            frame_output = frame_rgb.astype(np.uint8)
         
-        # Ensure correct format (uint8, RGBA)
-        frame_rgba = frame_rgba.astype(np.uint8)
+        # Ensure we're writing exactly the right amount of data
+        expected_size = self.fb_size
+        actual_size = frame_output.nbytes
+        
+        if actual_size != expected_size:
+            # This shouldn't happen, but handle it gracefully
+            print(f"Warning: Frame size mismatch (expected {expected_size}, got {actual_size})")
+            return
         
         # Write to framebuffer
         try:
             self.fb_device.seek(0)
-            self.fb_device.write(frame_rgba.tobytes())
+            bytes_written = self.fb_device.write(frame_output.tobytes())
+            if bytes_written != expected_size:
+                print(f"Warning: Only wrote {bytes_written} of {expected_size} bytes")
             self.fb_device.flush()
+        except OSError as e:
+            # Don't print every error, just log occasionally
+            if hasattr(self, '_last_error_time'):
+                if time.time() - self._last_error_time > 1.0:  # Print max once per second
+                    print(f"Error writing to framebuffer: {e}")
+                    self._last_error_time = time.time()
+            else:
+                print(f"Error writing to framebuffer: {e}")
+                self._last_error_time = time.time()
         except Exception as e:
-            print(f"Error writing to framebuffer: {e}")
+            print(f"Unexpected error writing to framebuffer: {e}")
     
     def close(self):
         """Close framebuffer device"""
@@ -255,19 +331,30 @@ def main():
         sys.exit(1)
     
     print("\n" + "=" * 60)
-    print("Camera feed is now displaying on HDMI screen")
+    print("OAKD Camera feed is now displaying on HDMI screen")
     print("Press Ctrl+C to quit")
-    print("=" * 60 + "\n")
+    print("=" * 60)
+    print("\nNote: OAKD camera uses non-blocking queues.")
+    print("      Frames are read continuously to prevent queue overflow.\n")
     
     frame_count = 0
     last_fps_time = time.time()
     fps = 0
     error_count = 0
     max_errors = 10
+    skipped_frames = 0
+    last_display_time = time.time()
+    target_fps = 30.0
+    frame_interval = 1.0 / target_fps
+    
+    print("OAKD Camera: Keep reading frames regularly to prevent queue overflow")
+    print(f"Target display FPS: {target_fps}\n")
     
     try:
         while True:
-            # Get frame from camera with error handling
+            # CRITICAL: Always try to get frame from OAKD camera queue
+            # OAKD camera uses non-blocking queues - we must read regularly
+            # or the queue will fill up and cause X_LINK_ERROR
             try:
                 frame = camera.get_frame()
             except RuntimeError as e:
@@ -277,64 +364,73 @@ def main():
                 # Check if it's an X_LINK_ERROR (communication error)
                 if 'X_LINK_ERROR' in error_msg or 'Communication exception' in error_msg:
                     if error_count <= max_errors:
-                        print(f"\n⚠ Camera communication error ({error_count}/{max_errors}): {error_msg}")
-                        print("Attempting to continue...")
-                        time.sleep(0.1)
+                        if error_count == 1:  # Only print first error
+                            print(f"\n⚠ OAKD Camera communication error ({error_count}/{max_errors})")
+                            print("   This can happen if camera queue overflows or USB connection issues")
+                            print("   Continuing to read from queue...")
+                        time.sleep(0.01)  # Very short delay, keep reading queue
                         continue
                     else:
-                        print(f"\n❌ Too many camera communication errors ({error_count})")
+                        print(f"\n❌ Too many OAKD camera communication errors ({error_count})")
                         print("Possible causes:")
                         print("  1. USB cable connection issue - try unplugging and replugging")
                         print("  2. USB port power issue - try a different USB port")
-                        print("  3. Device needs to be reset")
+                        print("  3. Camera queue overflow - framebuffer writes too slow")
+                        print("  4. Device needs to be reset")
                         print("\nExiting...")
                         break
                 else:
                     # Other runtime errors
-                    print(f"\n❌ Camera error: {error_msg}")
+                    print(f"\n❌ OAKD Camera error: {error_msg}")
                     if error_count > max_errors:
                         print("Too many errors. Exiting...")
                         break
-                    time.sleep(0.1)
+                    time.sleep(0.01)
                     continue
             except Exception as e:
                 error_count += 1
-                print(f"\n⚠ Unexpected camera error ({error_count}/{max_errors}): {e}")
+                if error_count <= 3:  # Only print first few
+                    print(f"\n⚠ Unexpected OAKD camera error ({error_count}/{max_errors}): {e}")
                 if error_count > max_errors:
                     print("Too many errors. Exiting...")
                     break
-                time.sleep(0.1)
-                continue
-            
-            # Reset error count on successful frame
-            if frame is not None:
-                error_count = 0
-            
-            if frame is not None:
-                # Add overlay information
-                overlay = frame.copy()
-                
-                # Add FPS counter
-                frame_count += 1
-                current_time = time.time()
-                if current_time - last_fps_time >= 1.0:
-                    fps = frame_count
-                    frame_count = 0
-                    last_fps_time = current_time
-                
-                cv2.putText(overlay, f"FPS: {fps}", (10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                cv2.putText(overlay, "OAKD Camera - HDMI Output", (10, overlay.shape[0] - 20),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                
-                # Write frame to framebuffer
-                display.write_frame(overlay)
-            else:
                 time.sleep(0.01)
                 continue
             
-            # Small delay for frame rate control
-            time.sleep(0.01)
+            # Reset error count on successful frame read
+            if frame is not None:
+                error_count = 0
+            
+            # Display frame if available and enough time has passed
+            current_time = time.time()
+            if frame is not None:
+                # Check if we should display this frame (frame rate limiting)
+                if current_time - last_display_time >= frame_interval:
+                    # Add overlay information
+                    overlay = frame.copy()
+                    
+                    # Add FPS counter
+                    frame_count += 1
+                    if current_time - last_fps_time >= 1.0:
+                        fps = frame_count
+                        frame_count = 0
+                        last_fps_time = current_time
+                    
+                    cv2.putText(overlay, f"FPS: {fps}", (10, 30),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    cv2.putText(overlay, "OAKD Camera - HDMI Output", (10, overlay.shape[0] - 20),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                    
+                    # Write frame to framebuffer (non-blocking, fast)
+                    display.write_frame(overlay)
+                    last_display_time = current_time
+                else:
+                    # Skip frame to maintain frame rate
+                    skipped_frames += 1
+            
+            # Very short delay - OAKD camera needs regular queue reads
+            # Don't block here or camera queue will overflow
+            time.sleep(0.001)  # 1ms - just enough to prevent CPU spinning
     
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
