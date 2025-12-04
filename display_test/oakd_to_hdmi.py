@@ -1,6 +1,6 @@
 """
 OAKD Camera to HDMI Display
-Directly displays OAKD camera feed to HDMI screen without OpenCV window system
+Directly displays OAKD camera feed to HDMI screen using framebuffer
 """
 import os
 import sys
@@ -22,8 +22,6 @@ phase2_dir = os.path.join(parent_dir, 'phase2')
 sys.path.insert(0, phase2_dir)
 
 import numpy as np
-
-# Import OpenCV AFTER environment setup
 import cv2
 
 from oakd_camera import OAKDCamera
@@ -46,20 +44,62 @@ def get_framebuffer_resolution():
     return 1024, 600  # Default
 
 
-def display_frame_to_hdmi(frame, width=1024, height=600):
-    """
-    Display frame directly to HDMI using OpenCV window
+class FramebufferDisplay:
+    """Direct framebuffer display for Raspberry Pi HDMI"""
+    def __init__(self, width=1024, height=600):
+        self.width = width
+        self.height = height
+        self.fb_device = None
+        
+        # Get actual resolution from framebuffer
+        width, height = get_framebuffer_resolution()
+        self.width = width
+        self.height = height
+        self.fb_size = width * height * 4  # RGBA32
+        
+        # Open framebuffer device
+        try:
+            self.fb_device = open('/dev/fb0', 'wb')
+            print(f"✓ Opened framebuffer: /dev/fb0 ({width}x{height})")
+        except Exception as e:
+            print(f"ERROR: Could not open framebuffer /dev/fb0: {e}")
+            print("Make sure you have permission: sudo chmod 666 /dev/fb0")
+            raise
     
-    Args:
-        frame: numpy array (BGR frame)
-        width: Display width
-        height: Display height
-    """
-    # Resize frame to match display
-    if frame.shape[:2] != (height, width):
-        frame = cv2.resize(frame, (width, height))
+    def write_frame(self, frame):
+        """
+        Write frame to framebuffer
+        
+        Args:
+            frame: numpy array (BGR frame from camera)
+        """
+        # Resize frame to match framebuffer resolution
+        if frame.shape[:2] != (self.height, self.width):
+            frame = cv2.resize(frame, (self.width, self.height))
+        
+        # Convert BGR to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # Convert to RGBA (framebuffer expects RGBA32)
+        alpha = np.ones((self.height, self.width, 1), dtype=np.uint8) * 255
+        frame_rgba = np.concatenate([frame_rgb, alpha], axis=2)
+        
+        # Ensure correct format (uint8, RGBA)
+        frame_rgba = frame_rgba.astype(np.uint8)
+        
+        # Write to framebuffer
+        try:
+            self.fb_device.seek(0)
+            self.fb_device.write(frame_rgba.tobytes())
+            self.fb_device.flush()
+        except Exception as e:
+            print(f"Error writing to framebuffer: {e}")
     
-    return frame
+    def close(self):
+        """Close framebuffer device"""
+        if self.fb_device:
+            self.fb_device.close()
+            self.fb_device = None
 
 
 def main():
@@ -86,24 +126,18 @@ def main():
         traceback.print_exc()
         sys.exit(1)
     
-    # Create display window
-    print("\n[2/2] Setting up display...")
-    window_name = "OAKD Camera - HDMI Output"
-    
+    # Initialize framebuffer display
+    print("\n[2/2] Setting up framebuffer display...")
     try:
-        # Try fullscreen mode
-        cv2.namedWindow(window_name, cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        print("✓ Fullscreen mode enabled")
+        display = FramebufferDisplay(width, height)
+        print("✓ Framebuffer display ready")
     except Exception as e:
-        print(f"Warning: Could not set fullscreen: {e}")
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, width, height)
-        print("✓ Window mode enabled")
+        print(f"ERROR: Could not initialize framebuffer: {e}")
+        sys.exit(1)
     
     print("\n" + "=" * 60)
     print("Camera feed is now displaying on HDMI screen")
-    print("Press 'q' to quit")
+    print("Press Ctrl+C to quit")
     print("=" * 60 + "\n")
     
     frame_count = 0
@@ -131,20 +165,15 @@ def main():
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 cv2.putText(overlay, "OAKD Camera - HDMI Output", (10, overlay.shape[0] - 20),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                cv2.putText(overlay, "Press 'q' to quit", (10, overlay.shape[0] - 50),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
                 
-                # Display frame
-                display_frame = display_frame_to_hdmi(overlay, width, height)
-                cv2.imshow(window_name, display_frame)
+                # Write frame to framebuffer
+                display.write_frame(overlay)
             else:
                 time.sleep(0.01)
                 continue
             
-            # Check for quit
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:  # 'q' or ESC
-                break
+            # Small delay for frame rate control
+            time.sleep(0.01)
     
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
@@ -154,11 +183,10 @@ def main():
         traceback.print_exc()
     finally:
         print("\nCleaning up...")
+        display.close()
         camera.release()
-        cv2.destroyAllWindows()
         print("Done!")
 
 
 if __name__ == "__main__":
     main()
-
