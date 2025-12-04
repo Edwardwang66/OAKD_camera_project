@@ -88,7 +88,6 @@ class FramebufferEmojiDisplay:
         # Try using PIL for emoji support
         try:
             from PIL import Image, ImageDraw, ImageFont
-            import numpy as np
             
             # Create PIL image
             pil_image = Image.new('RGB', (self.width, self.height), 
@@ -137,8 +136,9 @@ class FramebufferEmojiDisplay:
             # Convert PIL image to OpenCV format
             frame = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
             
-        except ImportError:
+        except (ImportError, Exception) as e:
             # Fallback: Use OpenCV text (won't show emoji properly)
+            # PIL might not be installed or other error occurred
             text = str(emoji_text)[:20]
             font_scale = font_size * 2
             thickness = 4
