@@ -19,7 +19,6 @@ WORKDIR /app
 
 # Copy requirements first for better caching
 COPY phase2/requirements.txt ./phase2/requirements.txt
-COPY requirements.txt ./requirements.txt 2>/dev/null || true
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \

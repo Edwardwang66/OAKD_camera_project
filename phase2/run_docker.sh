@@ -19,12 +19,18 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Check if docker-compose is installed
-if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+# Detect docker compose command (newer versions use 'docker compose', older use 'docker-compose')
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
     echo "Error: docker-compose is not installed"
     echo "Install docker-compose: https://docs.docker.com/compose/install/"
     exit 1
 fi
+
+echo "Using: $DOCKER_COMPOSE"
 
 # Parse command line arguments
 SIMULATION="--simulation"
@@ -67,13 +73,13 @@ fi
 CMD="$CMD $EXTRA_ARGS"
 
 echo "Building Docker image..."
-docker-compose build || docker compose build
+$DOCKER_COMPOSE build
 
 echo ""
 echo "Running Phase 2 demo in Docker..."
 echo "Command: $CMD"
 echo ""
 
-# Run with docker-compose
-docker-compose run --rm phase2 $CMD || docker compose run --rm phase2 $CMD
+# Run with docker compose
+$DOCKER_COMPOSE run --rm phase2 $CMD
 
