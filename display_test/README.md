@@ -46,6 +46,41 @@ sudo chmod 666 /dev/fb0
 python3 oakd_to_hdmi.py --fb /dev/fb1
 ```
 
+## Troubleshooting
+
+### Camera Communication Error (X_LINK_ERROR)
+
+If you see `X_LINK_ERROR` or `Communication exception`:
+
+1. **Check USB connection:**
+   ```bash
+   lsusb | grep -i oak
+   ```
+   If no device found, try unplugging and replugging the USB cable.
+
+2. **Try a different USB port** - Some ports may not provide enough power
+
+3. **Check USB permissions:**
+   ```bash
+   sudo usermod -a -G dialout $USER
+   # Log out and log back in
+   ```
+
+4. **Reset the device:**
+   - Unplug the OAKD camera
+   - Wait 5 seconds
+   - Plug it back in
+   - Wait for device to initialize (5-10 seconds)
+   - Try running the script again
+
+5. **Check if device is busy:**
+   ```bash
+   # Check if another process is using the camera
+   lsof | grep -i usb
+   ```
+
+The script will automatically retry on communication errors up to 10 times before exiting.
+
 ## Requirements
 
 - Raspberry Pi with OAKD camera connected via USB

@@ -262,11 +262,53 @@ def main():
     frame_count = 0
     last_fps_time = time.time()
     fps = 0
+    error_count = 0
+    max_errors = 10
     
     try:
         while True:
-            # Get frame from camera
-            frame = camera.get_frame()
+            # Get frame from camera with error handling
+            try:
+                frame = camera.get_frame()
+            except RuntimeError as e:
+                error_count += 1
+                error_msg = str(e)
+                
+                # Check if it's an X_LINK_ERROR (communication error)
+                if 'X_LINK_ERROR' in error_msg or 'Communication exception' in error_msg:
+                    if error_count <= max_errors:
+                        print(f"\n⚠ Camera communication error ({error_count}/{max_errors}): {error_msg}")
+                        print("Attempting to continue...")
+                        time.sleep(0.1)
+                        continue
+                    else:
+                        print(f"\n❌ Too many camera communication errors ({error_count})")
+                        print("Possible causes:")
+                        print("  1. USB cable connection issue - try unplugging and replugging")
+                        print("  2. USB port power issue - try a different USB port")
+                        print("  3. Device needs to be reset")
+                        print("\nExiting...")
+                        break
+                else:
+                    # Other runtime errors
+                    print(f"\n❌ Camera error: {error_msg}")
+                    if error_count > max_errors:
+                        print("Too many errors. Exiting...")
+                        break
+                    time.sleep(0.1)
+                    continue
+            except Exception as e:
+                error_count += 1
+                print(f"\n⚠ Unexpected camera error ({error_count}/{max_errors}): {e}")
+                if error_count > max_errors:
+                    print("Too many errors. Exiting...")
+                    break
+                time.sleep(0.1)
+                continue
+            
+            # Reset error count on successful frame
+            if frame is not None:
+                error_count = 0
             
             if frame is not None:
                 # Add overlay information
