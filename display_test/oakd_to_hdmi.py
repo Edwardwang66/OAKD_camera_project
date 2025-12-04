@@ -194,10 +194,47 @@ class FramebufferDisplay:
             self.bits_per_pixel = 24
             self.format = 'RGB24'
         
+        # Check actual device size
+        try:
+            import os
+            device_size = os.path.getsize(self.fb_path)
+            print(f"Framebuffer device size: {device_size} bytes")
+            print(f"Calculated frame size: {self.fb_size} bytes")
+            
+            if device_size < self.fb_size:
+                print(f"⚠ Warning: Device size ({device_size}) is smaller than calculated size ({self.fb_size})")
+                print(f"   Adjusting to device size...")
+                # Adjust to fit device size
+                if device_size % (width * height) == 0:
+                    # Can determine bytes per pixel from device size
+                    actual_bpp = device_size // (width * height)
+                    if actual_bpp == 3:
+                        self.bits_per_pixel = 24
+                        self.format = 'RGB24'
+                        self.fb_size = width * height * 3
+                    elif actual_bpp == 4:
+                        self.bits_per_pixel = 32
+                        self.format = 'RGBA32'
+                        self.fb_size = width * height * 4
+                    else:
+                        print(f"   Unusual bytes per pixel: {actual_bpp}, using RGB24")
+                        self.bits_per_pixel = 24
+                        self.format = 'RGB24'
+                        self.fb_size = width * height * 3
+                else:
+                    # Can't determine, use safe default
+                    print(f"   Using safe default: RGB24")
+                    self.bits_per_pixel = 24
+                    self.format = 'RGB24'
+                    self.fb_size = width * height * 3
+        except Exception as e:
+            print(f"Could not check device size: {e}")
+            # Continue with calculated size
+        
         # Open framebuffer device
         try:
             self.fb_device = open(self.fb_path, 'wb')
-            print(f"✓ Opened framebuffer: {self.fb_path} ({width}x{height}, {format_str})")
+            print(f"✓ Opened framebuffer: {self.fb_path} ({width}x{height}, {self.format})")
         except Exception as e:
             print(f"ERROR: Could not open framebuffer {self.fb_path}: {e}")
             print(f"Make sure you have permission: sudo chmod 666 {self.fb_path}")
@@ -244,21 +281,55 @@ class FramebufferDisplay:
         # Write to framebuffer
         try:
             self.fb_device.seek(0)
-            bytes_written = self.fb_device.write(frame_output.tobytes())
+            frame_bytes = frame_output.tobytes()
+            
+            # Ensure we don't write more than expected
+            if len(frame_bytes) > expected_size:
+                frame_bytes = frame_bytes[:expected_size]
+            
+            bytes_written = self.fb_device.write(frame_bytes)
             if bytes_written != expected_size:
-                print(f"Warning: Only wrote {bytes_written} of {expected_size} bytes")
+                if bytes_written != len(frame_bytes):
+                    # Only warn if we didn't write all the data we tried to write
+                    if not hasattr(self, '_write_warning_shown'):
+                        print(f"Warning: Only wrote {bytes_written} of {expected_size} bytes to framebuffer")
+                        self._write_warning_shown = True
             self.fb_device.flush()
-        except OSError as e:
-            # Don't print every error, just log occasionally
+            
+            # Reset error tracking on successful write
             if hasattr(self, '_last_error_time'):
-                if time.time() - self._last_error_time > 1.0:  # Print max once per second
+                delattr(self, '_last_error_time')
+                
+        except OSError as e:
+            # Handle "No space left on device" specifically
+            error_str = str(e)
+            if 'No space left on device' in error_str or 'errno 28' in error_str.lower():
+                # This usually means we're writing too much data
+                if not hasattr(self, '_space_error_shown'):
+                    print(f"\n⚠ Framebuffer write error: {e}")
+                    print(f"   Expected size: {expected_size} bytes")
+                    print(f"   Actual size: {len(frame_output.tobytes())} bytes")
+                    print(f"   Trying to fix by using RGB24 format...")
+                    # Try to switch to RGB24
+                    self.bits_per_pixel = 24
+                    self.format = 'RGB24'
+                    self.fb_size = self.width * self.height * 3
+                    self._space_error_shown = True
+                # Don't write this frame, but continue
+                return
+            else:
+                # Other OSErrors - log occasionally
+                if hasattr(self, '_last_error_time'):
+                    if time.time() - self._last_error_time > 1.0:
+                        print(f"Error writing to framebuffer: {e}")
+                        self._last_error_time = time.time()
+                else:
                     print(f"Error writing to framebuffer: {e}")
                     self._last_error_time = time.time()
-            else:
-                print(f"Error writing to framebuffer: {e}")
-                self._last_error_time = time.time()
         except Exception as e:
-            print(f"Unexpected error writing to framebuffer: {e}")
+            if not hasattr(self, '_unexpected_error_shown'):
+                print(f"Unexpected error writing to framebuffer: {e}")
+                self._unexpected_error_shown = True
     
     def close(self):
         """Close framebuffer device"""
