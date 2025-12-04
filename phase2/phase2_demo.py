@@ -8,10 +8,34 @@ State Machine:
 - APPROACH: Move towards person (left/right/straight based on person position)
 - INTERACT: Stop in front of person
 """
-import cv2
-import time
-import sys
 import os
+import sys
+import time
+
+# Set environment variables BEFORE importing cv2 to avoid Qt backend issues
+# Don't set QT_QPA_PLATFORM=offscreen as that prevents display
+# Instead, let OpenCV try Qt, and if it fails, it will fall back to GTK
+if 'OPENCV_VIDEOIO_PRIORITY_MSMF' not in os.environ:
+    os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+if 'DISPLAY' in os.environ:
+    os.environ['GDK_BACKEND'] = 'x11'
+
+# Suppress Qt error messages during cv2 import by redirecting stderr
+# This allows OpenCV to try Qt, fail gracefully, and fall back to GTK
+import contextlib
+import io
+_stderr_backup = sys.stderr
+sys.stderr = io.StringIO()
+
+try:
+    import cv2
+except Exception:
+    # If import fails, restore stderr and re-raise
+    sys.stderr = _stderr_backup
+    raise
+finally:
+    # Restore stderr after import (Qt errors will be suppressed)
+    sys.stderr = _stderr_backup
 
 # Add parent directory to path for utils
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
