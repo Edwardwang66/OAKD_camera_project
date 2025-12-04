@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  phase2:
+    build:
+      context: ..
+      dockerfile: phase2/Dockerfile
+    container_name: phase2_demo
+    privileged: true  # Required for USB device access
+    devices:
+      # OAKD camera (USB device)
+      - /dev/bus/usb:/dev/bus/usb
+      # VESC serial port (if needed)
+      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    volumes:
+      # Mount project directory
+      - ..:/app
+      # Mount X11 socket for display (optional, if X11 forwarding is needed)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    environment:
+      # Avoid Qt conflicts
+      - QT_QPA_PLATFORM=offscreen
+      - OPENCV_VIDEOIO_PRIORITY_MSMF=0
+      # X11 forwarding (if needed)
+      - DISPLAY=${DISPLAY:-}
+      - XAUTHORITY=${XAUTHORITY:-}
+      # Python
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app:/app/phase2
+    network_mode: host  # For better USB device access
+    stdin_open: true
+    tty: true
+    command: python phase2/phase2_demo.py --simulation
+
