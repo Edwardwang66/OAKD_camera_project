@@ -5,11 +5,31 @@
 ## 文件说明
 
 - `display_check.py` - 显示检查工具
-- `emoji_display.py` - Emoji 显示工具
+- `emoji_display.py` - Emoji 显示工具（通用版本）
+- `emoji_display_framebuffer.py` - Emoji 显示工具（专用于 framebuffer）
 - `test_display.py` - 快速测试脚本
+- `setup_framebuffer.sh` - Framebuffer 环境设置脚本
 - `README.md` - 本文件
 
 ## 快速开始
+
+### 对于 Raspberry Pi 本地显示器（Framebuffer）
+
+如果你有直接连接到 Raspberry Pi 的显示器（如 7 寸触摸屏），使用 framebuffer 版本：
+
+```bash
+# 1. 设置环境（可选，但推荐）
+source setup_framebuffer.sh
+
+# 2. 显示 emoji
+python emoji_display_framebuffer.py --emoji smile
+```
+
+或者直接运行（会自动检测分辨率）：
+
+```bash
+python emoji_display_framebuffer.py --emoji heart
+```
 
 ### 1. 检查显示
 

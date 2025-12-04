@@ -5,6 +5,11 @@ Checks display availability and capabilities
 import os
 import sys
 
+# Set environment variables to avoid Qt backend issues before importing cv2
+# For Raspberry Pi with framebuffer display, we don't need Qt
+os.environ.setdefault('QT_QPA_PLATFORM', '')
+os.environ.setdefault('OPENCV_VIDEOIO_PRIORITY_LIST', 'V4L2,FFMPEG')
+
 def check_display():
     """
     Check if display is available on Raspberry Pi
@@ -62,20 +67,17 @@ def check_display():
     except (OSError, AttributeError):
         pass
     
-    # Check OpenCV display capability
+    # Check OpenCV display capability (safe check without creating windows)
     try:
         import cv2
-        # Try to create a test window
-        try:
-            cv2.namedWindow('__test__', cv2.WINDOW_NORMAL)
-            cv2.destroyWindow('__test__')
-            print("✓ OpenCV display backend available")
-            display_info['opencv_available'] = True
-        except Exception as e:
-            print(f"✗ OpenCV display backend error: {e}")
-            display_info['opencv_available'] = False
+        display_info['opencv_installed'] = True
+        # Don't try to create a window here as it might crash with Qt backend
+        # We'll just check if cv2 is importable
+        print("✓ OpenCV is installed")
+        display_info['opencv_available'] = None  # Unknown until we try
     except ImportError:
         print("✗ OpenCV not installed")
+        display_info['opencv_installed'] = False
         display_info['opencv_available'] = False
     
     return display_info
@@ -125,7 +127,9 @@ def print_display_summary():
     else:
         print("  ✗ Display is NOT AVAILABLE")
     
-    if info.get('opencv_available'):
+    if info.get('opencv_available') is None:
+        print("  ? OpenCV display capability: Will test when displaying")
+    elif info.get('opencv_available'):
         print("  ✓ OpenCV can display windows")
     else:
         print("  ✗ OpenCV cannot display windows")
