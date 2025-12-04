@@ -4,15 +4,27 @@ Direct framebuffer access without Qt dependencies
 """
 import os
 import sys
+
+# CRITICAL: Set environment variables BEFORE importing any other modules
+# OpenCV initializes Qt backend during import, so we must set these first
+
+# Remove DISPLAY to force OpenCV to use framebuffer
+if 'DISPLAY' in os.environ:
+    del os.environ['DISPLAY']
+
+# Disable Qt backend completely
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+os.environ['QT_LOGGING_RULES'] = '*.debug=false'
+
+# Set OpenCV preferences
+os.environ['OPENCV_VIDEOIO_PRIORITY_LIST'] = 'V4L2,FFMPEG'
+os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+
+# Now import other modules
 import numpy as np
 import time
 
-# Set environment before importing cv2
-os.environ.setdefault('DISPLAY', ':0.0')
-# Disable Qt to avoid crashes
-os.environ.pop('QT_QPA_PLATFORM', None)
-os.environ.setdefault('OPENCV_VIDEOIO_PRIORITY_LIST', 'V4L2,FFMPEG')
-
+# Import cv2 AFTER setting environment
 import cv2
 
 # Add parent directory to path
