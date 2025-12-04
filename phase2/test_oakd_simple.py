@@ -5,6 +5,7 @@ Displays OAKD camera feed in a window
 import cv2
 import sys
 import os
+import argparse
 
 # Try to import depthai
 try:
@@ -50,11 +51,22 @@ def main():
     print("=" * 60)
     print("\nPress 'q' to quit\n")
 
-    # Detect headless mode (no DISPLAY/X11). Avoid Qt/OpenCV GUI calls to prevent crashes.
-    headless = os.environ.get("DISPLAY") is None
-    if headless:
-        print("[INFO] DISPLAY not set. Running headless (no cv2.imshow).")
-        print("       Use ssh -Y/-X with XQuartz if you want the live video window.")
+    # CLI flag to explicitly opt into GUI. Default is headless-safe to avoid Qt aborts.
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--show", action="store_true", help="Enable GUI window (requires working X11/display)")
+    args = parser.parse_args()
+
+    display_env = os.environ.get("DISPLAY")
+    headless = True  # default to headless unless user explicitly opts in
+    if args.show and display_env:
+        headless = False
+        print(f"[INFO] GUI requested (--show). DISPLAY={display_env}. Attempting cv2.imshow.")
+    else:
+        print("[INFO] Running headless (no cv2.imshow).")
+        if args.show and not display_env:
+            print("[WARN] --show requested but DISPLAY is not set; staying headless.")
+        print("       Use ssh -Y/-X with XQuartz and pass --show if you want the live video window.")
+        print("       In headless mode, exit with Ctrl+C.")
     
     try:
         # Set up pipeline
