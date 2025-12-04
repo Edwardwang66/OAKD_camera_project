@@ -11,22 +11,6 @@ The car operates autonomously with three main states:
 - **APPROACH**: Moves towards person (LEFT/RIGHT/STRAIGHT based on person position)
 - **INTERACT**: Stops in front of person at target distance
 
-## Person Detection Architecture
-
-### Primary: Edge AI on OAKD Camera
-- **MobileNet-SSD** runs on **OAKD camera's Myriad X VPU** (Edge AI)
-- Model runs directly on camera hardware, **not on Raspberry Pi CPU**
-- Benefits:
-  - ✅ Zero CPU load on Raspberry Pi for inference
-  - ✅ Lower latency (no data transfer for inference)
-  - ✅ Higher throughput
-  - ✅ Only detection results sent to Pi, not raw video frames
-
-### Fallback: CPU on Raspberry Pi
-- **MediaPipe Pose** runs on **Raspberry Pi CPU** (if DepthAI fails)
-- Used only when OAKD edge AI detection is unavailable
-- More CPU intensive but provides reliable fallback
-
 ## Hardware Requirements
 
 - **Raspberry Pi 5** (or Raspberry Pi 4)
