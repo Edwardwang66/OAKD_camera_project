@@ -124,6 +124,7 @@ python phase2_demo.py --target-distance 1.5
 - `--target-distance`: Target distance to person in meters (default: 1.0)
 - `--vesc-port`: VESC serial port (e.g., /dev/ttyACM0), None for auto-detect
 - `--simulation`: Run in simulation mode (no actual car control)
+- `--allow-fallback`: Permit CPU/MediaPipe fallback if DepthAI fails (default: stay on OAK-D)
 
 ## State Machine
 
