@@ -52,7 +52,11 @@ class Phase2Demo:
     Phase 2 Demo: Person following and approaching
     Designed for Raspberry Pi 5 with OAKD camera and VESC control
     """
-    def __init__(self, target_distance=1.0, vesc_port=None, simulation_mode=False):
+    def __init__(self, target_distance=1.0, vesc_port=None, simulation_mode=False,
+                 use_oakd=True, camera_source=None, allow_fallback=False,
+                 steering_inverted=False, steering_offset=0.0, steering_scale=1.0,
+                 servo_center=0.5, servo_range=0.45, vesc_start_heartbeat=False,
+                 throttle_scale=0.8, vesc_duty_percent=0.5):
         """
         Initialize Phase 2 demo
         
@@ -60,6 +64,9 @@ class Phase2Demo:
             target_distance: Target distance to person in meters
             vesc_port: VESC serial port (e.g., '/dev/ttyACM0'), None for auto-detect
             simulation_mode: If True, car commands are printed only (for testing)
+            use_oakd: If False, skip OAK-D and use webcam/video fallback
+            camera_source: Optional fallback camera id/path for webcam mode
+            allow_fallback: Allow CPU/MediaPipe fallback if DepthAI is unavailable
         """
         print("=" * 60)
         print("Phase 2: Person Following and Approaching")
@@ -78,7 +85,12 @@ class Phase2Demo:
         # Initialize OAKD camera with person detection
         print("\n[1/3] Initializing OAKD camera with person detection...")
         try:
-            self.camera = OAKDCamera()
+            self.camera = OAKDCamera(
+                use_oakd=use_oakd,
+                video_source=camera_source,
+                allow_fallback=allow_fallback,
+                fast_mode=False  # default to standard 1080p pipeline to avoid sensor warnings
+            )
             if not self.camera.available:
                 print("ERROR: OAKD camera not available. Exiting.")
                 sys.exit(1)
@@ -100,7 +112,15 @@ class Phase2Demo:
         self.car = CarController(
             vesc_port=vesc_port,
             use_donkeycar=True,
-            simulation_mode=simulation_mode
+            simulation_mode=simulation_mode,
+            steering_inverted=steering_inverted,
+            steering_offset=steering_offset,
+            steering_scale=steering_scale,
+            servo_center=servo_center,
+            servo_range=servo_range,
+            vesc_start_heartbeat=vesc_start_heartbeat,
+            throttle_scale=throttle_scale,
+            vesc_duty_percent=vesc_duty_percent,
         )
         
         # Initialize controllers
@@ -319,6 +339,29 @@ class Phase2Demo:
             cv2.putText(display, "[VESC ACTIVE]", (10, 200),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         
+        # Vision backend/exposure status
+        status = {}
+        if hasattr(self.camera, "get_status"):
+            status = self.camera.get_status()
+        backend_text = "Vision: OAK-D (edge NN)"
+        backend_color = (0, 200, 0)
+        if status.get("using_webcam"):
+            backend_text = "Vision: Webcam MediaPipe (CPU fallback)"
+            backend_color = (0, 165, 255)
+        elif status.get("using_mediapipe") and not status.get("using_depthai_nn"):
+            backend_text = "Vision: OAK-D MediaPipe (CPU fallback)"
+            backend_color = (0, 165, 255)
+        elif not status.get("using_depthai_nn"):
+            backend_text = "Vision: Unknown backend"
+            backend_color = (0, 0, 255)
+        cv2.putText(display, backend_text, (10, h - 60),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, backend_color, 1)
+
+        if status.get("camera_notes"):
+            note_text = " | ".join(status["camera_notes"])
+            cv2.putText(display, note_text, (10, h - 40),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1)
+
         # Add X11 forwarding indicator
         display_env = os.environ.get("DISPLAY", "N/A")
         cv2.putText(display, f"DISPLAY: {display_env}", (10, h - 20),
@@ -363,13 +406,46 @@ def main():
                        help='VESC serial port (e.g., /dev/ttyACM0), None for auto-detect')
     parser.add_argument('--simulation', action='store_true',
                        help='Run in simulation mode (no actual car control)')
+    parser.add_argument('--no-oakd', action='store_true',
+                        help='Skip trying OAK-D hardware and go straight to webcam/video fallback')
+    parser.add_argument('--camera-source', type=str, default=None,
+                        help='Fallback camera/video source (e.g., 0 for /dev/video0 or a file path)')
+    parser.add_argument('--allow-fallback', action='store_true',
+                        help='Permit CPU/MediaPipe fallback if DepthAI fails')
+    parser.add_argument('--steering-invert', action='store_true',
+                        help='Invert steering direction (if wheels turn opposite of expected)')
+    parser.add_argument('--steering-offset', type=float, default=0.0,
+                        help='Steering offset added to command (-1..1) to straighten wheels')
+    parser.add_argument('--steering-scale', type=float, default=1.0,
+                        help='Scale steering command (0..1) to reduce throw')
+    parser.add_argument('--servo-center', type=float, default=0.5,
+                        help='Servo center pulse (0-1, default 0.5)')
+    parser.add_argument('--servo-range', type=float, default=0.45,
+                        help='Servo range from center (0-1, default 0.45). servo = center + range * steering')
+    parser.add_argument('--vesc-heartbeat', action='store_true',
+                        help='Enable pyvesc heartbeat (disabled by default to avoid port errors)')
+    parser.add_argument('--throttle-scale', type=float, default=0.8,
+                        help='Scale normalized throttle before sending to VESC (default 0.8)')
+    parser.add_argument('--vesc-duty-percent', type=float, default=0.5,
+                        help='Duty cycle cap passed into DonkeyCar VESC percent parameter (default 0.5=50%)')
     
     args = parser.parse_args()
     
     demo = Phase2Demo(
         target_distance=args.target_distance,
         vesc_port=args.vesc_port,
-        simulation_mode=args.simulation
+        simulation_mode=args.simulation,
+        use_oakd=not args.no_oakd,
+        camera_source=args.camera_source,
+        allow_fallback=args.allow_fallback,
+        steering_inverted=args.steering_invert,
+        steering_offset=args.steering_offset,
+        steering_scale=args.steering_scale,
+        servo_center=args.servo_center,
+        servo_range=args.servo_range,
+        vesc_start_heartbeat=args.vesc_heartbeat,
+        throttle_scale=args.throttle_scale,
+        vesc_duty_percent=args.vesc_duty_percent,
     )
     
     try:

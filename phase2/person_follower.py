@@ -17,8 +17,10 @@ class PersonFollower:
                  max_angular_speed=1.0,
                  k_angle=1.0,
                  k_linear=0.5,
-                 angle_threshold=0.1,
-                 distance_threshold=0.2):
+                 angle_threshold=0.3,
+                 distance_threshold=0.2,
+                 turn_linear_factor=0.2,
+                 area_close_threshold=0.6):
         """
         Initialize person follower
         
@@ -30,6 +32,8 @@ class PersonFollower:
             k_linear: Proportional gain for linear control
             angle_threshold: Angle error threshold for "aligned" (normalized, 0-1)
             distance_threshold: Distance error threshold for "close enough" (m)
+            turn_linear_factor: Forward speed factor while turning (0..1 of max_linear_speed)
+            area_close_threshold: Heuristic area ratio to decide we are "close enough" without depth
         """
         self.target_distance = target_distance
         self.max_linear_speed = max_linear_speed
@@ -38,6 +42,8 @@ class PersonFollower:
         self.k_linear = k_linear
         self.angle_threshold = angle_threshold
         self.distance_threshold = distance_threshold
+        self.turn_linear_factor = turn_linear_factor
+        self.area_close_threshold = area_close_threshold
     
     def compute_control(self, person_bbox, image_width, distance_to_person=None):
         """
@@ -93,6 +99,7 @@ class PersonFollower:
         # Distance control: move towards/away from person
         # For Part 1, we don't have depth, so we'll use a simple heuristic
         # based on bounding box size (larger box = closer person)
+        linear = 0.0
         if distance_to_person is not None:
             distance_error = distance_to_person - self.target_distance
             close_enough = abs(distance_error) < self.distance_threshold
@@ -102,7 +109,9 @@ class PersonFollower:
                 linear = self.k_linear * distance_error
                 linear = np.clip(linear, 0, self.max_linear_speed)  # Don't move backwards
             else:
-                linear = 0.0
+                # If not aligned, creep forward slowly to help close the gap
+                if not close_enough:
+                    linear = self.max_linear_speed * self.turn_linear_factor
         else:
             # No depth info - use bounding box size as heuristic
             bbox_width = x_max - x_min
@@ -111,15 +120,18 @@ class PersonFollower:
             image_area = image_width * (y_max - y_min)  # Approximate
             
             # If person takes up significant portion of image, assume close enough
-            area_ratio = bbox_area / (image_width * image_width)  # Normalize
+            area_ratio = bbox_area / (image_width * image_width)  # Normalize by width^2 (matches original heuristic)
             
-            close_enough = area_ratio > 0.15  # Threshold (adjust based on testing)
+            # Use a higher threshold so we don't stop too early (was 0.15)
+            close_enough = area_ratio > self.area_close_threshold
             
             # Move forward if aligned and not close enough
             if aligned and not close_enough:
                 linear = self.max_linear_speed * 0.5  # Moderate speed
             else:
-                linear = 0.0
+                # While turning, still roll forward a bit if not close
+                if not close_enough:
+                    linear = self.max_linear_speed * self.turn_linear_factor
         
         # If close enough and aligned, stop
         if aligned and close_enough:
@@ -180,4 +192,3 @@ class SearchController:
             'angular': self.search_angular_speed,  # Rotate slowly
             'direction': 'SEARCH (ROTATE)'
         }
-
