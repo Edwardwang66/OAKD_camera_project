@@ -18,6 +18,17 @@ def is_gui_available():
     """
     # Check if DISPLAY environment variable is set
     display = os.environ.get("DISPLAY")
+    
+    # Normalize numeric DISPLAY values like "0" -> ":0"
+    if display is not None and display.isdigit():
+        display = f":{display}"
+        os.environ["DISPLAY"] = display
+
+    # Prefer local HDMI display if available (avoids X11 auth errors from remote DISPLAY)
+    if (display is None or display.startswith("localhost")) and os.path.exists("/tmp/.X11-unix/X0"):
+        os.environ["DISPLAY"] = ":0"
+        display = os.environ.get("DISPLAY")
+    
     if display is None:
         return False
     
@@ -107,4 +118,3 @@ def print_gui_warning():
     print("  3. Make sure XQuartz is running before SSH connection")
     print("\nThe camera and processing will continue to work without GUI.")
     print("=" * 60 + "\n")
-
