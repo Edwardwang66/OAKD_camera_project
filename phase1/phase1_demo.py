@@ -201,6 +201,14 @@ class Phase1Demo:
         if not self.gui_available:
             print_gui_warning()
         else:
+            # Open the window once and force full screen on local display
+            try:
+                self.window_name = "Phase 1: OAK-D Demo"
+                cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+                cv2.setWindowProperty(self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            except Exception:
+                pass  # Fall back to default window if fullscreen fails
+            
             # Test XQuartz connection
             try:
                 test_img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -389,7 +397,7 @@ class Phase1Demo:
             
             # Show display (will output to XQuartz if DISPLAY is set)
             if self.gui_available:
-                safe_imshow("Phase 1: OAK-D Demo", display_frame)
+                safe_imshow(getattr(self, "window_name", "Phase 1: OAK-D Demo"), display_frame)
             
             # Print status to terminal
             if frame_count % 30 == 0:  # Print every 30 frames
@@ -509,4 +517,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

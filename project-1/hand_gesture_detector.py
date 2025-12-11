@@ -123,7 +123,8 @@ class HandGestureDetector:
         # Thumb: Special case - check if extended outward (perpendicular to palm)
         # Use distance from thumb tip to index MCP to determine if thumb is extended
         thumb_to_index_mcp_dist = abs(thumb_tip.x - index_mcp.x)
-        thumb_extended = thumb_to_index_mcp_dist > 0.05  # Threshold for thumb extension
+        # Slightly relax thumb extension so a tucked thumb in a fist counts as ROCK
+        thumb_extended = thumb_to_index_mcp_dist > 0.07  # was 0.05
         fingers_extended.append(1 if thumb_extended else 0)
         
         # Index finger: extended if tip is above PIP
@@ -146,8 +147,9 @@ class HandGestureDetector:
         total_extended = sum(fingers_extended)
         thumb, index, middle, ring, pinky = fingers_extended
         
-        # Rock: All fingers closed (fist)
-        if total_extended == 0:
+        # Rock: All fingers closed (fist), allow slight thumb separation
+        all_others_closed = (index == 0 and middle == 0 and ring == 0 and pinky == 0)
+        if all_others_closed and (not thumb_extended or thumb_to_index_mcp_dist < 0.12):
             return Gesture.ROCK
         
         # Paper: All fingers extended (open hand)
@@ -170,4 +172,3 @@ class HandGestureDetector:
     def release(self):
         """Release resources"""
         self.hands.close()
-
