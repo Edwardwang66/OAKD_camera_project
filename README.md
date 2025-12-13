@@ -106,7 +106,7 @@ Build an autonomous, vision-driven robot that can search for a person, approach 
  
 ## Robot Design
 <div align="center">
-<img src="media\car_cad.png?" width="525" height="791">
+<img src="media\car_cad.jpg?" width="525" height="791">
 </div>
 
 ### Hardware Components list
