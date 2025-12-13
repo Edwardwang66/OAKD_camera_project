@@ -121,7 +121,7 @@ Build an autonomous, vision-driven robot that can search for a person, approach 
 
 ## Electrical Diagram
 <div align="center">
-<img src="media\Electrical_Wiring.png?" width="581" height="500">
+<img src="media\Electrical_Wiring.jpg?" width="581" height="500">
 </div>
  
 ## References
