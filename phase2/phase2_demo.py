@@ -171,8 +171,28 @@ class Phase2Demo:
         last_status_print = 0
         
         while self.running:
+            # Check if camera is still available
+            if not self.camera.available:
+                print("\n[ERROR] Camera became unavailable. Possible USB communication issue.")
+                print("Please check:")
+                print("  1. USB cable is securely connected")
+                print("  2. Try unplugging and replugging the camera")
+                print("  3. Try a different USB port (prefer USB 3.0)")
+                print("\nExiting...")
+                break
+            
             # Person detection
-            person_found, person_bbox, detected_frame = self.camera.detect_person()
+            try:
+                person_found, person_bbox, detected_frame = self.camera.detect_person()
+            except Exception as e:
+                print(f"\n[ERROR] Camera error during detection: {e}")
+                if not self.camera.available:
+                    print("Camera marked as unavailable. Exiting...")
+                    break
+                # If camera is still available, continue with next frame
+                time.sleep(0.01)
+                continue
+            
             self.person_found = person_found
             self.person_bbox = person_bbox
             

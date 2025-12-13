@@ -5,7 +5,6 @@ Designed for Raspberry Pi 5 with X11 forwarding
 """
 import cv2
 import numpy as np
-import time
 
 # Try to import depthai
 try:
@@ -28,19 +27,8 @@ class OAKDCamera:
     OAKD Lite camera with integrated person detection
     Designed for Raspberry Pi 5
     """
-    def __init__(self, use_oakd=True, fallback_camera_id=0, video_source=None,
-                 allow_fallback=False, usb2_mode=True, fast_mode=False):
-        """
-        Initialize OAKD camera with person detection
-
-        Args:
-            use_oakd: If True, attempt to use an attached OAK-D device
-            fallback_camera_id: ID for cv2.VideoCapture fallback
-            video_source: Optional path or device index override for fallback capture
-            allow_fallback: If False, do not fall back to webcam/MediaPipe when DepthAI fails
-            usb2_mode: If True, force USB2 for stability (reduces bandwidth/power draw)
-            fast_mode: If True, reduce resolution and bump FPS for faster control loop
-        """
+    def __init__(self):
+        """Initialize OAKD camera with person detection"""
         self.pipeline = None
         self.device = None
         self.rgb_queue = None
@@ -49,75 +37,36 @@ class OAKDCamera:
         self.available = False
         self.use_mediapipe_fallback = False
         self.mediapipe_pose = None
-        self.fallback_camera = None
-        self.using_fallback_camera = False
-        self.use_oakd = use_oakd
-        self.fallback_camera_id = fallback_camera_id
-        self.video_source = video_source
-        self._restart_attempted = False
-        self._restart_in_progress = False
-        self._restart_attempts = 0
-        self.next_reconnect_time = 0
-        self.reconnect_backoff = 1.0  # seconds, doubles up to a cap
-        self._restart_attempted = False
-        self._restart_in_progress = False
-        self.allow_fallback = allow_fallback
-        self.using_depthai_nn = False
-        # Default to USB2 for stability; fast_mode can override at init time if desired
-        self.usb2_mode = usb2_mode
-        self.fast_mode = fast_mode
         
-        # If user explicitly disabled OAKD or DepthAI isn't installed, go straight to fallback
-        if not self.use_oakd or not DEPTHAI_AVAILABLE:
-            if not DEPTHAI_AVAILABLE:
-                print("Warning: DepthAI not available. Using fallback camera with MediaPipe if possible.")
-            if self.allow_fallback:
-                self.setup_webcam_fallback()
-                return
-            raise RuntimeError("DepthAI not available and fallback disabled")
+        if not DEPTHAI_AVAILABLE:
+            print("Error: DepthAI not available. Camera will not work.")
+            raise RuntimeError("DepthAI not available")
         
         # Try to set up DepthAI pipeline
         try:
             self.setup_pipeline()
         except Exception as e:
             print(f"[OAKDCamera] DepthAI pipeline setup failed: {e}")
-            if not self.allow_fallback:
-                raise
-            # Try MediaPipe fallback using OAKD camera first
+            # Try MediaPipe fallback
             if MEDIAPIPE_AVAILABLE:
-                try:
-                    print("[OAKDCamera] Falling back to MediaPipe person detection")
-                    self.setup_mediapipe_fallback()
-                    return
-                except Exception as mp_error:
-                    print(f"[OAKDCamera] MediaPipe fallback on OAKD failed: {mp_error}")
-            # Final fallback to regular webcam/video source
-            print("[OAKDCamera] Attempting webcam/video fallback...")
-            self.setup_webcam_fallback()
+                print("[OAKDCamera] Falling back to MediaPipe person detection")
+                self.setup_mediapipe_fallback()
+            else:
+                print("[OAKDCamera] No fallback available. Camera will not work.")
+                raise
     
     def setup_pipeline(self):
         """Set up DepthAI pipeline with RGB camera and person detection"""
         try:
-            # Ensure an OAK-D device is connected before building the pipeline
-            if not self._is_depthai_device_connected():
-                raise RuntimeError("No OAKD device found")
-            
             # Create pipeline
             self.pipeline = dai.Pipeline()
             
-            # Create RGB camera (stick to 1080P to avoid IMX378 warnings)
+            # Create RGB camera
             cam_rgb = self.pipeline.create(dai.node.ColorCamera)
+            cam_rgb.setPreviewSize(640, 480)  # Display size
             cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
-            cam_rgb.setPreviewSize(300, 300)   # NN input (square, letterboxed)
-            cam_rgb.setVideoSize(640, 480)     # Display size (wider view)
-            cam_rgb.setFps(20)                 # Balanced FPS/latency
-            cam_rgb.setPreviewKeepAspectRatio(True)
             cam_rgb.setInterleaved(False)
             cam_rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
-            try:
-                cam_rgb.setVideoKeepAspectRatio(True)
-            except Exception:
-                pass
             
             # Create detection network for person detection
             # Try MobileNetDetectionNetwork first (older DepthAI versions)
@@ -149,12 +98,7 @@ class OAKDCamera:
             
             # Set confidence threshold (only for MobileNetDetectionNetwork)
             if use_mobilenet_node:
-                # Slightly lower threshold to improve recall in low light
-                self.detection_nn.setConfidenceThreshold(0.35)
-                try:
-                    self.detection_nn.setNumInferenceThreads(2)
-                except Exception:
-                    pass
+                self.detection_nn.setConfidenceThreshold(0.5)
             self.detection_nn.input.setBlocking(False)
             
             # Create outputs
@@ -171,34 +115,44 @@ class OAKDCamera:
                 xout_nn = self.pipeline.create(dai.XLinkOut)
             xout_nn.setStreamName("nn")
             
-            # Linking: preview (300x300 letterboxed) -> NN; video (640x360) -> display
-            cam_rgb.preview.link(self.detection_nn.input)
-            cam_rgb.video.link(xout_rgb.input)
+            # Create ImageManip to resize for detection network (300x300)
+            # MobileNet-SSD expects 300x300 input
+            manip = self.pipeline.create(dai.node.ImageManip)
+            manip.initialConfig.setResize(300, 300)
+            manip.initialConfig.setFrameType(dai.ImgFrame.Type.BGR888p)
+            manip.setMaxOutputFrameSize(300 * 300 * 3)
+            
+            # Linking
+            # Camera preview -> ImageManip -> Detection Network
+            cam_rgb.preview.link(manip.inputImage)
+            manip.out.link(self.detection_nn.input)
+            # Camera preview -> RGB output (for display)
+            cam_rgb.preview.link(xout_rgb.input)
+            # Detection Network -> NN output
             self.detection_nn.out.link(xout_nn.input)
             
             # Connect to device
-            try:
-                self.device = dai.Device(self.pipeline, usb2Mode=self.usb2_mode)
-            except TypeError:
-                self.device = dai.Device(self.pipeline, self.usb2_mode)
+            self.device = dai.Device(self.pipeline)
             self.rgb_queue = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
             self.nn_queue = self.device.getOutputQueue(name="nn", maxSize=4, blocking=False)
             
             self.available = True
-            self.using_depthai_nn = True
-            self.reconnect_backoff = 1.0
             print("[OAKDCamera] Camera initialized successfully with DepthAI person detection")
             
         except Exception as e:
             print(f"[OAKDCamera] Error setting up DepthAI detection: {e}")
-            self.available = False
-            raise
+            # Try MediaPipe fallback
+            if MEDIAPIPE_AVAILABLE:
+                print("[OAKDCamera] Falling back to MediaPipe person detection")
+                self.setup_mediapipe_fallback()
+            else:
+                print("[OAKDCamera] No fallback available. Camera will not work.")
+                self.available = False
+                raise
     
     def setup_mediapipe_fallback(self):
         """Set up OAKD camera with MediaPipe person detection fallback"""
         try:
-            if not self._is_depthai_device_connected():
-                raise RuntimeError("No OAKD device found for MediaPipe fallback")
             # Create simple RGB pipeline
             self.pipeline = dai.Pipeline()
             
@@ -231,66 +185,12 @@ class OAKDCamera:
             
             self.use_mediapipe_fallback = True
             self.available = True
-            self.using_depthai_nn = False
             print("[OAKDCamera] Camera initialized with MediaPipe person detection fallback")
             
         except Exception as e:
             print(f"[OAKDCamera] Error setting up MediaPipe fallback: {e}")
             self.available = False
             raise
-
-    def setup_webcam_fallback(self):
-        """Set up webcam/video source with MediaPipe detection (no OAKD required)"""
-        if not MEDIAPIPE_AVAILABLE:
-            raise RuntimeError("MediaPipe not available for webcam fallback")
-        
-        source = self.video_source if self.video_source is not None else self.fallback_camera_id
-        # Allow numeric strings for device indices
-        if isinstance(source, str) and source.isdigit():
-            source = int(source)
-        self.fallback_camera = cv2.VideoCapture(source)
-        if not self.fallback_camera.isOpened():
-            raise RuntimeError(f"Could not open fallback camera/video source: {source}")
-        
-        # Configure basic resolution for consistent overlays
-        self.fallback_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.fallback_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        
-        self.mp_pose = mp.solutions.pose
-        self.mediapipe_pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            enable_segmentation=False,
-            min_detection_confidence=0.5
-        )
-        
-        self.use_mediapipe_fallback = True
-        self.using_fallback_camera = True
-        self.available = True
-        self.using_depthai_nn = False
-        print("[OAKDCamera] Using webcam/video fallback with MediaPipe person detection")
-
-    def _restart_depthai_pipeline(self):
-        """Attempt to restart the DepthAI pipeline after a runtime error"""
-        if not DEPTHAI_AVAILABLE or not self.use_oakd:
-            return False
-        if self._restart_attempted:
-            return False
-        self._restart_attempted = True
-        self._restart_attempts += 1
-        self._restart_in_progress = True
-        try:
-            # Release existing resources and rebuild pipeline
-            self.release()
-            self.using_depthai_nn = False
-            self.exposure_locked = False
-            self.setup_pipeline()
-            self._restart_in_progress = False
-            return self.available
-        except Exception as e:
-            print(f"[OAKDCamera] Restart attempt failed: {e}")
-            self._restart_in_progress = False
-            return False
     
     def get_frame(self):
         """
@@ -299,20 +199,36 @@ class OAKDCamera:
         Returns:
             numpy.ndarray: BGR frame, or None if no frame available
         """
-        if self.using_fallback_camera:
-            if self.fallback_camera is None:
-                return None
-            ret, frame = self.fallback_camera.read()
-            return frame if ret else None
-        
         if not self.available or self.rgb_queue is None:
             return None
         
-        in_rgb = self.rgb_queue.tryGet()
-        if in_rgb is not None:
-            frame = in_rgb.getCvFrame()
-            return frame
-        return None
+        try:
+            in_rgb = self.rgb_queue.tryGet()
+            if in_rgb is not None:
+                frame = in_rgb.getCvFrame()
+                return frame
+            return None
+        except RuntimeError as e:
+            error_msg = str(e)
+            # Check if it's an X_LINK_ERROR (USB communication error)
+            if 'X_LINK_ERROR' in error_msg or 'Communication exception' in error_msg:
+                # This can happen if:
+                # 1. USB cable connection issue
+                # 2. USB port power issue
+                # 3. Camera queue overflow (frames not read fast enough)
+                # 4. Device crashed or disconnected
+                print(f"[OAKDCamera] USB communication error: {error_msg}")
+                print("[OAKDCamera] Possible causes:")
+                print("  1. USB cable loose or disconnected - try unplugging and replugging")
+                print("  2. USB port power issue - try a different USB port (prefer USB 3.0)")
+                print("  3. Camera queue overflow - frames not being read fast enough")
+                print("  4. Device needs to be reset - unplug and replug the camera")
+                # Mark as unavailable so we don't keep trying
+                self.available = False
+                return None
+            else:
+                # Other runtime errors - re-raise
+                raise
     
     def detect_person(self):
         """
@@ -324,54 +240,18 @@ class OAKDCamera:
                 - person_bbox: (x_min, y_min, x_max, y_max) or None
                 - frame: BGR frame with annotations
         """
-        # If OAK-D is unavailable, periodically attempt reconnection
-        if not self.available and self.use_oakd and not self.using_fallback_camera:
-            now = time.time()
-            if now >= self.next_reconnect_time and not self._restart_in_progress:
-                print("[OAKDCamera] Attempting to reconnect to OAK-D...")
-                if self._restart_depthai_pipeline():
-                    try:
-                        frame = self.get_frame()
-                        if frame is None:
-                            return False, None, None
-                    except Exception as restart_error:
-                        print(f"[OAKDCamera] Reconnect succeeded but failed to read frame: {restart_error}")
-                        return False, None, None
-                else:
-                    return False, None, None
-            elif not self.use_mediapipe_fallback:
-                # Not ready to retry yet; no fallback available
-                return False, None, None
+        if not self.available:
+            return False, None, None
         
-        # Get frame
+        # Get frame (with error handling for USB communication issues)
         try:
             frame = self.get_frame()
-            # If we made it here, reset restart flag for future errors
-            self._restart_attempted = False
-        except RuntimeError as e:
-            # Handle DepthAI link errors at runtime and fall back to webcam/MediaPipe
-            if "X_LINK_ERROR" in str(e) or "Communication exception" in str(e):
-                if self.use_oakd and not self.using_fallback_camera and not self._restart_in_progress:
-                    print("[OAKDCamera] Runtime link error, marking camera unavailable and scheduling reconnect...")
-                    self.available = False
-                    self.next_reconnect_time = time.time() + self.reconnect_backoff
-                    self.reconnect_backoff = min(self.reconnect_backoff * 2, 10.0)
-                    return False, None, None
-                else:
-                    if not self.allow_fallback:
-                        print("[OAKDCamera] Runtime link error and fallback disabled")
-                        self.available = False
-                        return False, None, None
-                    print("[OAKDCamera] Runtime link error, switching to webcam fallback...")
-                    try:
-                        self.setup_webcam_fallback()
-                        frame = self.get_frame()
-                    except Exception as fallback_error:
-                        print(f"[OAKDCamera] Webcam fallback failed: {fallback_error}")
-                        self.available = False
-                        return False, None, None
-            else:
-                raise
+        except Exception as e:
+            # If get_frame() raises an exception (other than handled RuntimeError),
+            # mark as unavailable and return
+            print(f"[OAKDCamera] Error getting frame: {e}")
+            self.available = False
+            return False, None, None
         
         if frame is None:
             return False, None, None
@@ -379,7 +259,6 @@ class OAKDCamera:
         annotated_frame = frame.copy()
         person_found = False
         person_bbox = None
-        conf_threshold = 0.35
         
         # Use MediaPipe fallback if enabled
         if self.use_mediapipe_fallback:
@@ -429,7 +308,7 @@ class OAKDCamera:
                 else:
                     continue
                 
-                if label == 15 and confidence > conf_threshold:  # Person class
+                if label == 15 and confidence > 0.5:  # Person class with confidence > 0.5
                     person_found = True
                     
                     # Get bounding box coordinates
@@ -525,45 +404,13 @@ class OAKDCamera:
         
         return detections
     
-    def _is_depthai_device_connected(self):
-        """Check if an OAKD/DepthAI device is connected"""
-        if not DEPTHAI_AVAILABLE:
-            return False
-        try:
-            devices = dai.Device.getAllAvailableDevices()
-            return len(devices) > 0
-        except Exception:
-            # If the API is unavailable, fall back to attempting connection elsewhere
-            return True
-    
     def release(self):
         """Release camera resources"""
         if self.mediapipe_pose:
             self.mediapipe_pose.close()
-            self.mediapipe_pose = None
         if self.device:
-            try:
-                self.device.close()
-            except Exception:
-                pass
-            self.device = None
-        if self.fallback_camera:
-            self.fallback_camera.release()
-            self.fallback_camera = None
+            del self.device
         self.pipeline = None
         self.rgb_queue = None
         self.nn_queue = None
-        self.available = False
-        self.using_depthai_nn = False
-        self.use_mediapipe_fallback = False
-        self.using_fallback_camera = False
         print("[OAKDCamera] Released")
-
-    def get_status(self):
-        """Expose backend/exposure status for UI overlays"""
-        return {
-            "using_depthai_nn": self.using_depthai_nn,
-            "using_mediapipe": self.use_mediapipe_fallback,
-            "using_webcam": self.using_fallback_camera,
-            "camera_notes": [],
-        }

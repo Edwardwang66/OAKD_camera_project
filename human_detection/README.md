@@ -80,3 +80,4 @@ This module is integrated into the main menu system (`main_menu.py`) to:
 - Recognition threshold can be adjusted based on testing
 - Minimum 3-5 face samples recommended for reliable recognition
 
+

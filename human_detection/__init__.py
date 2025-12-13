@@ -9,3 +9,4 @@ from .registration_ui import RegistrationUI
 
 __all__ = ['UserRegistration', 'RegistrationUI']
 
+

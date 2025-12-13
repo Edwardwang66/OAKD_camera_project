@@ -136,3 +136,4 @@ The container sets these automatically:
 - Control logic works perfectly without display
 - Terminal output shows all status information
 
+

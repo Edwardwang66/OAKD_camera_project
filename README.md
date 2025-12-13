@@ -1,304 +1,122 @@
-# OAKD Camera Projects
-
-This repository contains multiple OpenCV-based projects using the OAKD Lite camera for the Raspberry Pi 5 Donkey Car setup with a 7-inch screen.
+<div id="top"></div>
+<h1 align="center">Autonomous Roadside Mechanic</h1>
+<br />
+<div align="center">
+  <a href="https://jacobsschool.ucsd.edu/">
+    <img src="media\UCSDLogo_JSOE_BlueGold.png" alt="Logo" width="432" height="108">
+  </a>
+
+## 
+
+<h3>Team 7 </h3>
+<h3>ECE/MAE 148 Final Project FA25</h3>
+<p>
+</p>
+<img src="media\car.jpg?" width="605" height="501">
+</div>
+
+## Table of Contents
+  <ol>
+    <li><a href="#team-members">Team Members</a></li>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#what-we-promised">What We Promised</a></li>
+    <li><a href="#accomplishments">Accomplishments</a></li>
+    <li><a href="#demonstration">Demonstration</a></li>
+    <li><a href="#challenges">Challenges</a></li>
+    <li><a href="#robot-design">Robot Design</a></li>
+    <li><a href="#electrical-diagram">Electrical Diagram</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#Acknowledgments">Acknowledgments</a></li>
+  </ol>
+  
+## Team Members
+
+<ul>
+  <li>Alison Stosser - Mechanical Engineering</li>
+  <li>Long-Giang Vu - MS Computer Science and Engineering</li>
+  <li>Qiwen Xu - Electrical Computer Engineering</li>
+  <li>Shubhan Mital - MS Electrical and Computer Engineering (MLDS)</li>
+</ul>
+
+## Overview
+The goal of the "Autonomous Roadside Mechanic" is to identify and navigate a broken down car on the side of the road via hazard lights. The system uses two cameras, one “bird’s eye” camera mounted above the road which identifies there is a broken down vehicle via a blinking hazard light and one OAK-D camera mounted on the car to detect the car itself on the ground. Using ROS2, the “bird’s eye” camera sends a signal to activate the mechanic while the mechanic receives the signal to start driving on the track to navigate to and park behind the broken down car.
+
+## What We Promised
+### Must Have:
+* Bird’s eye view camera that detects broken down stationary vehicle via hazard lights, sends signal to activate mechanic
+* Receive “release” signal from bird’s eye view camera to start driving forward to search for broken down vehicle
+* Detect back of broken down vehicle with OAK-D camera
+* Stop behind the broken down car using LiDAR 
+
+### Nice to Have:
+* Avoid other cars/obstacles on the track
+* Ability to push the broken down car for a distance (simulating moving the car out of harm's way) 
+* Change lanes into the emergency lane
+
+## Accomplishments
+* We sucessfully integrated a Jetson Nano with ROS2 node and Intel RealSense Camera for "bird's eye view"
+  * Detects blinking red lights and send publishes release signal
+  * Pi is able to access and recieve the signal that a red blinking light has been detected
+* Created accurate Roboflow model for detecting the cars in general, but focusing on the back of cars
+  * Model runs on the camera with an approximate 90% accuracy
+* We created a ROS2 node on Pi that uses the OAK-D camera running a Roboflow model to calculate the angle from the center of the camera to the center of the broken down vehicle
+  * Measure both left and right offset 
+* We created a second ROS2 node on Pi to control the robot using LiDAR to calculate the distance between the robot and the broken down car
+  * Subscribes to blink detector node on Jetson Nano and camera node on Pi
+  * Car starts driving forward when message is received that red blinking light is  detected on “bird’s eye” camera
+  * Once the Roboflow model detects the broken down car, angle information from camera node is used to navigate the robot with a PD
+  * Car stops when the LiDAR calculates a certain distance from  the broken down car
+
+## Demonstration
+<div align="center">
+<img src="media/demo.gif" alt="Demo GIF" />
+</div>
+
+[Watch Full Demo Video](media/Demo_Video.mp4)
+
+## Challenges
+* Field of view for the Intel RealSense Camera was not as wide as necessary for a proper "bird's eye view"
+  * The solution was to lower our placement of the camera closer to the blinking hazard light, but given more time we would replace it with a wide angle camera
+* The PD control as the robot got closer to the broken down car was not as accurate due to the angle of correction needed being much greater at the shorter distances
+  * We solved this by exponentially scaling the error angle between the car and the robot which increased the angle of correction needed when the robot was father away thereby reducing the angle of correction necessary when the robot was closer
+* The blink detection algorithm was too sensitive and would trigger on any red light, not just hazard lights on stopped vehicles.
+  * To address this, we converted the bird’s eye camera image to HSV color space to isolate red pixels, applied region-of-interest filtering to focus on potential hazard lights, analyzed temporal brightness changes across frames, and confirmed the blink frequency using a fast Fourier transform (FFT). Only when all three conditions were met did the system send the release signal to the mechanic vehicle, significantly reducing false positives while reliably detecting stopped vehicles with blinking hazard lights.
+* Our Nice-To-Have goal is to integrate the existing lane detection system (from https://gitlab.com/ucsd_robocar2/ucsd_robocar_lane_detection2_pkg) with the mechanic system to enable lane following. Ideally, lane following is activated when the bird’s-eye camera detects a blinking light and remains active until a car is detected. Although the code integration is complete, we encountered an issue where the camera cannot simultaneously run both the Roboflow detection pipeline and the lane detection pipeline. The most likely cause is that the Roboflow detection node creates its own camera pipeline, while the lane detection node also attempts to subscribe directly to the camera, leading to conflicts between the two nodes.
+    * Possible solution: Introduce a dedicated camera node that publishes raw RGB image data. Both the lane detection node and the car detection (Roboflow) node will then subscribe to this shared image topic, allowing them to process the same camera data independently without pipeline conflicts.
+
+
+ 
+## Robot Design
+<div align="center">
+<img src="media\car_cad.png?" width="525" height="791">
+</div>
+
+### Hardware Components list
+  * Traxxas Chassis with steering servo and sensored brushless DC motor
+  * Jetson Nano
+  * Inter RealSense D435i
+  * Raspberry pi
+  * OAK-D camera
+  * Lidar LD06
+  * 12V Battery
+  * DC-DC Converter (12V to 5V)
+  * VESC
 
-## 🎮 Main Menu System
-
-**Start here!** The main menu system provides user recognition, registration, and game selection.
+## Electrical Diagram
+<div align="center">
+<img src="media\Electrical_Wiring.png?" width="581" height="500">
+</div>
+ 
+## References
+* [Roboflow Car Detection Model](https://universe.roboflow.com/ece-148/car-object-detection-vw2le-5heye)
 
-**Quick Start:**
-```bash
-python main_menu.py
-```
+## Acknowledgments
+Documentation inspired by/directly referenced from Team 5 - Fall 2024
 
-**Features:**
-- **User Recognition**: Automatically recognizes registered users
-- **User Registration**: Register new users with face samples
-- **Personalized Greetings**: 
-  - Registered users: "Hello, [Name]!"
-  - Strangers: "Hello, Stranger! What game do you want to play?"
-- **Game Selection**: Choose from 3 games (1, 2, or 3)
+Thank you to Professor Jack Silberman and our incredible TA's Winston and Aryan for an amazing Fall 2025 class!
 
-See [README_MAIN_MENU.md](README_MAIN_MENU.md) for detailed documentation.
 
-## Projects
 
-### Project 1: Rock-Paper-Scissors Game
-A real-time rock-paper-scissors game that detects hand gestures (rock, paper, or scissors) and plays against an AI opponent (Donkey Car).
-
-**Location**: `project-1/`
-
-**Features**:
-- Hand gesture recognition using MediaPipe
-- Real-time game with AI opponent
-- Score tracking
-- UI optimized for 7-inch screen
-
-**Quick Start**:
-```bash
-cd project-1
-pip install -r requirements-laptop.txt  # For laptop testing
-python test_laptop.py  # Test on laptop
-python main.py  # Run full game
-```
-
-### Project 2: Air Drawing
-An air drawing application that tracks your index finger and visualizes the drawing on screen in real-time.
-
-**Location**: `project-2/`
-
-**Features**:
-- Index finger tracking
-- Real-time drawing visualization
-- Multiple colors and brush sizes
-- Split-screen display (camera + canvas)
-
-**Quick Start**:
-```bash
-cd project-2
-pip install opencv-python mediapipe numpy  # For laptop testing
-python main.py
-```
-
-### Project 3: 1v1 Shooting Game - Car as Referee
-A gesture-based shooting game where two players face off using "pistol gestures" to shoot each other. The car acts as a referee, detecting shots and determining hits.
-
-**Location**: `project-3/`
-
-**Features**:
-- Pistol gesture detection (index finger + thumb up)
-- Two-player tracking
-- Shooting direction detection
-- Hit detection and health system
-- Referee display with win announcements
-
-**Quick Start**:
-```bash
-cd project-3
-pip install opencv-python mediapipe numpy  # For laptop testing
-python test_laptop.py  # Test pistol detection
-python main.py  # Run full game
-```
-
-## Hardware Setup
-
-- **Raspberry Pi 5**
-- **OAKD Lite Camera** (USB connected)
-- **7-inch Display** (800x480 recommended, optional)
-- **Donkey Car** setup
-
-## Software Requirements
-
-Both projects require:
-- Python 3.8+
-- OpenCV
-- MediaPipe
-- NumPy
-- DepthAI (for OAKD camera, optional for laptop testing)
-- PyTorch (for model-based gesture detection in Project 1)
-
-## Installation on Raspberry Pi 5
-
-### 1. Install System Dependencies
-
-```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install Python and pip
-sudo apt install python3 python3-pip python3-venv -y
-
-# Install OpenCV dependencies
-sudo apt install libopencv-dev python3-opencv -y
-
-# Install other dependencies
-sudo apt install libusb-1.0-0 libgl1-mesa-glx libglib2.0-0 -y
-```
-
-### 2. Install DepthAI for OAKD Lite Camera
-
-```bash
-# Install DepthAI
-python3 -m pip install depthai
-
-# Verify OAKD camera is detected
-python3 -c "import depthai as dai; devices = dai.Device.getAllAvailableDevices(); print(f'Found {len(devices)} device(s)')"
-```
-
-### 3. Install Python Dependencies
-
-```bash
-# Create virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate
-
-# Install requirements
-pip install -r requirements-pi.txt
-
-# Note: PyTorch for ARM may need special installation
-# For Raspberry Pi, you may need to:
-# 1. Use pre-built wheels from: https://github.com/KumaTea/pytorch-aarch64
-# 2. Or build from source (takes several hours)
-```
-
-### 4. Install PyTorch for Raspberry Pi (ARM)
-
-PyTorch installation on Raspberry Pi requires special handling:
-
-```bash
-# Option 1: Use pre-built wheels (recommended)
-# Visit: https://github.com/KumaTea/pytorch-aarch64
-# Download appropriate wheel for your Python version
-
-# Option 2: Install via pip (if available for your architecture)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# Option 3: Build from source (advanced, takes hours)
-# Follow: https://pytorch.org/get-started/locally/
-```
-
-## Running Without Raspberry Pi Screen (SSH + X11 Forwarding)
-
-If your Raspberry Pi does NOT have a screen attached, you can run the project via SSH with X11 forwarding to display OpenCV windows on your Mac.
-
-### Mac Setup
-
-1. **Install XQuartz**:
-   ```bash
-   brew install --cask xquartz
-   ```
-
-2. **Configure XQuartz**:
-   - Open XQuartz (Applications > Utilities > XQuartz)
-   - Go to XQuartz > Preferences > Security
-   - Check "Allow connections from network clients"
-   - Restart XQuartz
-
-3. **Set DISPLAY variable** (if needed):
-   ```bash
-   export DISPLAY=:0
-   ```
-
-### SSH Connection with X11 Forwarding
-
-Connect to your Raspberry Pi with X11 forwarding enabled:
-
-```bash
-# Option 1: Trusted X11 forwarding (recommended, faster)
-ssh -Y pi@raspberrypi.local
-
-# Option 2: Untrusted X11 forwarding
-ssh -X pi@raspberrypi.local
-```
-
-**Note**: Replace `raspberrypi.local` with your Pi's IP address or hostname if needed.
-
-### Running the Project
-
-Once connected via SSH with X11 forwarding:
-
-```bash
-# Navigate to project directory
-cd OAKD_camera_project
-
-# Activate virtual environment (if using one)
-source venv/bin/activate
-
-# Run the main menu
-python main_menu.py
-```
-
-The OpenCV windows will appear on your Mac via X11 forwarding.
-
-### Troubleshooting
-
-**Issue: "could not connect to display" or "No display"**
-- **Solution**: Make sure XQuartz is running on your Mac before connecting via SSH
-- **Solution**: Verify X11 forwarding is enabled: `echo $DISPLAY` should show a value
-- **Solution**: Try restarting XQuartz and reconnecting
-
-**Issue: "X11 connection rejected"**
-- **Solution**: In XQuartz, enable "Allow connections from network clients" in Preferences > Security
-- **Solution**: Restart XQuartz after changing settings
-
-**Issue: Low FPS or slow performance**
-- **Solution**: Reduce camera resolution in camera initialization code
-- **Solution**: Use `-X` instead of `-Y` for untrusted forwarding (may be slower but more secure)
-- **Solution**: Consider using a wired network connection instead of WiFi
-
-**Issue: GUI not available warning**
-- This is normal if X11 forwarding is not set up
-- The application will still run and process camera data
-- To enable GUI, follow the SSH + X11 setup instructions above
-
-### Headless Mode (No GUI)
-
-The project is designed to work in headless mode. If GUI is not available:
-- Camera processing continues normally
-- All game logic works
-- Only the visual display is skipped
-- You'll see a warning message but the app won't crash
-
-## Testing on Laptop
-
-Both projects can be tested on your laptop using a regular webcam:
-
-1. Install minimal dependencies (no DepthAI needed)
-2. Run the test scripts
-3. The applications will automatically use your webcam
-
-See individual project READMEs for detailed instructions.
-
-## Headless Mode Support
-
-All scripts are designed to work in headless environments (no display):
-
-- **GUI Available**: OpenCV windows display normally
-- **GUI Not Available**: Application continues running, skips window display
-- **Automatic Detection**: Scripts automatically detect GUI availability
-- **No Crashes**: Applications gracefully handle missing GUI
-
-This makes it easy to:
-- Run via SSH without X11 forwarding
-- Deploy on headless servers
-- Test camera functionality without display
-
-## Project Structure
-
-```
-OAKD_camera_project/
-├── main_menu.py        # Main menu system (START HERE)
-├── user_registration.py  # User registration & recognition
-├── game_menu.py        # Game selection menu
-├── registration_ui.py  # Registration UI
-├── camera.py           # Shared camera interface
-├── project-1/          # Rock-Paper-Scissors Game
-│   ├── main.py
-│   ├── hand_gesture_detector.py
-│   ├── game_logic.py
-│   ├── oakd_camera.py
-│   ├── ui_display.py
-│   └── ...
-├── project-2/          # Air Drawing
-│   ├── main.py
-│   ├── finger_tracker.py
-│   ├── drawing_canvas.py
-│   ├── camera.py
-│   ├── ui_display.py
-│   └── ...
-├── project-3/          # 1v1 Shooting Game
-│   ├── main.py
-│   ├── pistol_detector.py
-│   ├── game_logic.py
-│   ├── camera.py
-│   ├── ui_display.py
-│   └── ...
-├── user_data/          # User registration data (created automatically)
-├── requirements.txt    # Root dependencies
-├── README.md           # This file
-└── README_MAIN_MENU.md # Main menu documentation
-```
-
-## License
-
-MIT License - see LICENSE file for details
+<div align="center">
+<img src="media\team_photo.jpg?" width="582" height="436">
+</div>
