@@ -81,3 +81,4 @@ This module is integrated into the main menu system (`main_menu.py`) to:
 - Minimum 3-5 face samples recommended for reliable recognition
 
 
+
